@@ -46,14 +46,15 @@ def scrinner():
 
     columns = ['Name', 'Price', 'Sector', 'Industry', 'P/E', 'P/S',
                'Debt/Equity', 'ATR', 'Average Volume', 'Short Float']
+    index = []
     rows = []
-    tickers = []
     for stock in stocks.values():
-        tickers.append(stock.ticker)
-        rows.append([stock.data['name'], stock.data['price'], stock.data['sector'], stock.data['industry'],
-                     stock.data['p_e'], stock.data['p_s'], stock.data['debt_eq'], stock.data['atr'],
-                     stock.data['avg_v'], stock.data['short_float']])
+        index.append(stock.ticker)
+        rows.append([stock.data['name'], stock.data['price'], stock.data['sector'],
+                     stock.data['industry'], stock.data['p_e'], stock.data['p_s'], stock.data['debt_eq'],
+                     stock.data['atr'], stock.data['avg_v'], stock.data['short_float']])
 
-    df = pd.DataFrame(rows, index=tickers, columns=columns)
+    df = pd.DataFrame(rows, index=index, columns=columns)
+    df.sort_index(inplace=True)
 
     return df
