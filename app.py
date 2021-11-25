@@ -16,7 +16,9 @@ def hello_world():
 
 @app.route('/home')
 def home_page():
-    return render_template('home.html', table=DATA_STOCKS.to_html(classes='stocks_talbe'))
+    return render_template('home.html',
+                           table=DATA_STOCKS
+                           .to_html(classes='table table-striped table-bordered table-sm'))
 
 
 if __name__ == '__main__':
