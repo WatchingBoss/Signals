@@ -1,1 +1,1 @@
-from ta import scrinner
+from ta import scanner

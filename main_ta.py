@@ -1,5 +1,5 @@
-from ta import scrinner
+from ta import scanner
 
 
 if __name__ == "__main__":
-    scrinner.scrinner()
+    pass

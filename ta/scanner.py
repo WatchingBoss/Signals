@@ -2,42 +2,25 @@ import os, json
 
 import tinvest
 import pandas as pd
+import myhelper as mh
 
 from ta.stock import Stock
 
 
-def get_market_stocks(client, stocks_dict):
-    payload = client.get_market_stocks().payload
-    stocks_usd = [stock for stock in payload.instruments[:] if stock.currency == 'USD']
-
-    for i in range(len(stocks_usd)):
-        stock = stocks_usd[i]
-        stocks_dict[stock.figi] = Stock(stock.ticker, stock.figi, stock.isin, stock.currency)
+class Scanner:
+    def __init__(self):
+        self.client = mh.get_client()
+        self.usd_stocks = mh.get_market_data(self.client, 'USD')
 
 
-def load_stocks(file, client, stocks_dict):
-    with open(file, 'r') as f:
-        tickers = f.readline().split(' ')
-    for t in tickers:
-        stock = client.get_market_search_by_ticker(t).payload.instruments[0]
-        stocks_dict[stock.figi] = Stock(stock.ticker, stock.figi, stock.isin, stock.currency)
-
-
-def scrinner():
+def overview():
     with open(os.path.join(os.path.expanduser('~'), 'no_commit', 'info.json')) as f:
         data = json.load(f)
     client = tinvest.SyncClient(data['token_tinkoff_real'])
 
     path_data_dir = os.path.join(os.curdir, 'data')
-    path_stocks_usd = os.path.join(path_data_dir, 'stocks_usd' + '.json')
-    if not os.path.isdir(path_data_dir):
-        os.mkdir(path_data_dir)
 
     stocks = {}
-    load_stocks(os.path.join('data', 'work_stocks.txt'), client, stocks)
-
-    for k, v in stocks.items():
-        v.add_scraping_data()
 
     columns = ['Name', 'Price', 'Sector', 'Industry', 'P/E', 'P/S',
                'Debt/Equity', 'ATR', 'Average Volume', 'Short Float']
