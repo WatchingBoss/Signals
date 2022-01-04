@@ -1,3 +1,5 @@
 # IDE foldre
 /.idea/
 /__pycache__/
+
+*.pkl

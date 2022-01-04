@@ -1,14 +1,9 @@
-import os, sys, json, time
-from datetime import datetime, timedelta, timezone
-import asyncio
-import concurrent.futures
+import os, json
 
 import tinvest
-import numpy as np
 import pandas as pd
-from tradingview_ta import TA_Handler, Interval, Exchange
 
-from stock import Stock, Timeframe
+from ta.stock import Stock
 
 
 def get_market_stocks(client, stocks_dict):
@@ -57,4 +52,6 @@ def scrinner():
     df = pd.DataFrame(rows, index=index, columns=columns)
     df.sort_index(inplace=True)
 
-    return df
+    pkl_file = os.path.join(path_data_dir, 'overview.pkl')
+    df.to_pickle(pkl_file)
+

@@ -1,0 +1,9 @@
+set FLASK_APP=main.py
+set SECRET_KEY=a12f6509ce1e5886064f24119c73a6aa
+set DATABASE_URI=sqlite:///E:\Work\Code\my_signal_service\data\app.db
+@REM set MAIL_SERVER=localhost
+@REM set MAIL_PORT=8025
+@REM set MAIL_USE_TLS=1
+@REM set MAIL_USERNAME=
+@REM set MAIL_PASSWORD=
+@REM set ADMINS=['admin@email.com']

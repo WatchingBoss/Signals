@@ -1,6 +1,5 @@
 from datetime import datetime, timedelta, timezone
-import asyncio
-import scraper
+from ta import scraper
 import tinvest
 import pandas as pd
 import numpy as np
