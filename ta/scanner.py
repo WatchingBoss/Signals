@@ -2,15 +2,24 @@ import os, json
 
 import tinvest
 import pandas as pd
-import myhelper as mh
 
 from ta.stock import Stock
+from ta import myhelper as mh
 
 
 class Scanner:
     def __init__(self):
         self.client = mh.get_client()
-        self.usd_stocks = mh.get_market_data(self.client, 'USD')
+        self.usd_stocks = mh.get_market_data(self.client, 'USD', developing=True)
+
+    def fill_all_stocks(self):
+        for s in self.usd_stocks.values():
+            s.fill_df(self.client, s.m1)
+
+    def print_dfs(self):
+        for s in self.usd_stocks.values():
+            print(s.ticker)
+            print(s.m1.df.iloc[0])
 
 
 def overview():

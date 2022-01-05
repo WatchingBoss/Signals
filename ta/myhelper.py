@@ -7,6 +7,11 @@ def get_market_data(client, currency, developing=True):
     if developing:
         with open(os.path.join('data', 'work_stocks.txt')) as f:
             tickers = f.readline().split(' ')
+        stocks = {}
+        for t in tickers:
+            s = client.get_market_search_by_ticker(t).payload.instruments[0]
+            stocks[s.figi] = Stock(s.ticker, s.figi, s.isin, s.currency)
+        return stocks
     else:
         payload = client.get_market_stocks().payload
         stocks = [s for s in payload.instruments[:] if s.currency == currency]

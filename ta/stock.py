@@ -1,11 +1,9 @@
 from datetime import datetime, timedelta, timezone
+import time
 from ta import scraper
 from ta.indicators import ema, macd, rsi
 import tinvest as ti
 import pandas as pd
-
-
-SIGNAL = []
 
 
 class Instrument:
@@ -41,9 +39,6 @@ class Timeframe:
     def rsi(self):
         self.df = rsi(self.df, 'Close', 14)
 
-    def get_candles(self, client, ):
-        pass
-
 
 class Event:
     def __init__(self, tf: Timeframe, msg):
@@ -72,5 +67,25 @@ class Stock(Instrument):
     def check_if_able_for_short(self):
         self.shortable = scraper.check_tinkoff_short_table(self.isin)
 
-    def return_all_tf(self):
+    def return_tfs(self):
         return [self.m1, self.m5, self.m15]
+
+    def fill_df(self, client, tf: Timeframe):
+        start = datetime.utcnow()
+        list_size = 250
+        candle_list = []
+        for _ in range(10):
+            if len(candle_list) >= list_size:
+                break
+            try:
+                candles = client.get_market_candles(self.figi,
+                                                    from_=start - timedelta(days=1),
+                                                    to=start,
+                                                    interval=tf.interval).payload.candles
+                start -= timedelta(days=1)
+                for c in candles:
+                    candle_list.append([c.time, c.o, c.h, c.l, c.c, c.v])
+            except ti.exceptions.TooManyRequestsError:
+                time.sleep(60)
+        tf.df = pd.DataFrame(candle_list, columns=['Time', 'Open', 'High', 'Low', 'Close', 'Volume'])\
+                .sort_values(by='Time', ascending=True, ignore_index=True)
