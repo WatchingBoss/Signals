@@ -2,6 +2,12 @@ import pandas as pd
 import numpy as np
 
 
+def sma(df, base, target, period):
+    df[target] = df[base].rolling(window=period).mean()
+    df[target].fillna(0, inplace=True)
+    return df
+
+
 def ema(df, base, target, period, alpha=False):
     con = pd.concat([df[:period][base].rolling(window=period).mean(), df[period:][base]])
 
@@ -38,7 +44,7 @@ def macd(df, fast_ema=12, slow_ema=26, signal=9, base='Close'):
     df[hist] = np.where(np.logical_and(np.logical_not(df[macd_col] == 0), np.logical_not(df[sig] == 0)),
                         df[macd_col] - df[sig], 0)
 
-    return df
+    return df.drop(columns=[fast_col, slow_col, macd_col, sig])
 
 
 def rsi(df, base="Close", period=14):
@@ -55,3 +61,18 @@ def rsi(df, base="Close", period=14):
     df['rsi'].fillna(0, inplace=True)
 
     return df
+
+def atr(df, period, ohlc):
+    this_atr = f'ATR_{str(period)}'
+
+    if not 'TR' in df.columns:
+        df['h-l'] = df[ohlc[1]] - df[ohlc[2]]
+        df['h-yc'] = abs(df[ohlc[1]] - df[ohlc[3]].shift())
+        df['l-yc'] = abs(df[ohlc[2]] - df[ohlc[3]].shift())
+
+        df['TR'] = df[['h-l', 'h-yc', 'l-yc']].max(axis=1)
+
+        df.drop(['h-l', 'h-yc', 'l-yc'], inplace=True, axis=1)
+
+    df = ema(df, 'TR', this_atr, period, alpha=True)
+    return df.drop(columns=['TR'])

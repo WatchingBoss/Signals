@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 import time
 from ta import scraper
-from ta.indicators import ema, macd, rsi
+from ta.indicators import sma, ema, macd, rsi, atr
 import tinvest as ti
 import pandas as pd
 
@@ -30,6 +30,9 @@ class Timeframe:
 
         self.last_modify_time = datetime.now(tz=timezone.utc)
 
+    def sma(self, column_name, period):
+        self.df = sma(self.df, 'Close', column_name, period)
+
     def ema(self, column_name, period):
         self.df = ema(self.df, 'Close', column_name, period, False)
 
@@ -38,6 +41,9 @@ class Timeframe:
 
     def rsi(self):
         self.df = rsi(self.df, 'Close', 14)
+
+    def atr(self, period):
+        self.df = atr(self.df, period, ['Open', 'High', 'Low', 'Close'])
 
 
 class Event:
@@ -89,3 +95,12 @@ class Stock(Instrument):
                 time.sleep(60)
         tf.df = pd.DataFrame(candle_list, columns=['Time', 'Open', 'High', 'Low', 'Close', 'Volume'])\
                 .sort_values(by='Time', ascending=True, ignore_index=True)
+
+    def fill_indicators(self, tf: Timeframe):
+        for period in [10, 20, 50, 100, 200]:
+            tf.sma(f'SMA_{period}', period)
+        for period in [10, 20, 50, 100, 200]:
+            tf.ema(f'EMA_{period}', period)
+        tf.macd()
+        tf.rsi()
+        tf.atr(10)

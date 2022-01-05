@@ -11,15 +11,29 @@ class Scanner:
     def __init__(self):
         self.client = mh.get_client()
         self.usd_stocks = mh.get_market_data(self.client, 'USD', developing=True)
+        self.df = pd.DataFrame(columns=['Ticker', 'Time', 'Open', 'High', 'Low', 'Close', 'Volume',
+                                        'SMA_10', 'SMA_20', 'SMA_50', 'SMA_100', 'SMA_200',
+                                        'EMA_10', 'EMA_20', 'EMA_50', 'EMA_100', 'EMA_200',
+                                        'hist', 'RSI', 'ATR_10'])
 
     def fill_all_stocks(self):
         for s in self.usd_stocks.values():
             s.fill_df(self.client, s.m1)
+            s.fill_indicators(s.m1)
+
+    def sum_df(self):
+        last_values = [[s.ticker] + s.m1.df.tail(1).values.tolist()[0]
+                       for s in self.usd_stocks.values()]
+        self.df = pd.DataFrame(last_values, columns=self.df.columns)\
+                  .sort_values(by='Ticker', ascending=True, ignore_index=True)
+
 
     def print_dfs(self):
-        for s in self.usd_stocks.values():
-            print(s.ticker)
-            print(s.m1.df.iloc[0])
+        print(self.df.to_string())
+
+    def save_df(self, path):
+        self.df.to_pickle(path)
+
 
 
 def overview():
