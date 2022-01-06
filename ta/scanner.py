@@ -1,4 +1,5 @@
 import os, json
+from concurrent.futures import ThreadPoolExecutor
 
 import tinvest
 import pandas as pd
@@ -12,13 +13,18 @@ class Scanner:
         self.client = mh.get_client()
         self.usd_stocks = mh.get_market_data(self.client, 'USD', developing=True)
         self.df = pd.DataFrame(columns=['Ticker', 'Time', 'Open', 'High', 'Low', 'Close', 'Volume',
-                                        'SMA_10', 'SMA_20', 'SMA_50', 'SMA_100', 'SMA_200',
-                                        'EMA_10', 'EMA_20', 'EMA_50', 'EMA_100', 'EMA_200',
-                                        'hist', 'RSI', 'ATR_10'])
+                                        'SMA10', 'SMA20', 'SMA50', 'SMA100', 'SMA200',
+                                        'EMA10', 'EMA20', 'EMA50', 'EMA100', 'EMA200',
+                                        'MACD_hist', 'RSI', 'ATR10'])
+        self.fill_all_stocks()
 
     def fill_all_stocks(self):
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            [executor.submit(s.fill_df, self.client, s.m1) for s in self.usd_stocks.values()]
+            [executor.submit(s.fill_indicators, s.m1) for s in self.usd_stocks.values()]
+
+    def update_indicators(self):
         for s in self.usd_stocks.values():
-            s.fill_df(self.client, s.m1)
             s.fill_indicators(s.m1)
 
     def sum_df(self):

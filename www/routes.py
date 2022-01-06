@@ -1,5 +1,8 @@
-from flask import render_template, url_for
+from flask import render_template, url_for, g
+from flask_babel import get_locale
+
 from www import app
+
 import pandas as pd
 import os
 
@@ -20,4 +23,9 @@ def overview():
 def indicators():
     df = pd.read_pickle(os.path.join('data', 'indicators.pkl'))
     return render_template('indicators.html', title='Indicators',
-                           table=df.to_html(classes='table table-striped table-bordered table-sm'))
+                           table=df.to_html(classes='table table-striped table-bordered table-hover table-sm'))
+
+
+@app.before_request
+def before_request():
+    g.locale = str(get_locale())

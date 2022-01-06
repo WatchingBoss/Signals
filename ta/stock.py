@@ -98,9 +98,9 @@ class Stock(Instrument):
 
     def fill_indicators(self, tf: Timeframe):
         for period in [10, 20, 50, 100, 200]:
-            tf.sma(f'SMA_{period}', period)
+            tf.sma(f'SMA{period}', period)
         for period in [10, 20, 50, 100, 200]:
-            tf.ema(f'EMA_{period}', period)
+            tf.ema(f'EMA{period}', period)
         tf.macd()
         tf.rsi()
         tf.atr(10)

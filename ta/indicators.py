@@ -27,7 +27,7 @@ def macd(df, fast_ema=12, slow_ema=26, signal=9, base='Close'):
     slow_col = "ema_" + str(slow_ema)
     macd_col = "macd"
     sig = "signal"
-    hist = "hist"
+    hist = "MACD_hist"
 
     # Compute fast and slow EMA
     ema(df, base, fast_col, fast_ema)
@@ -63,7 +63,7 @@ def rsi(df, base="Close", period=14):
     return df
 
 def atr(df, period, ohlc):
-    this_atr = f'ATR_{str(period)}'
+    this_atr = f'ATR{str(period)}'
 
     if not 'TR' in df.columns:
         df['h-l'] = df[ohlc[1]] - df[ohlc[2]]
