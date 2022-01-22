@@ -1,10 +1,10 @@
 import os, json
 from concurrent.futures import ThreadPoolExecutor
+import asyncio
 
-import tinvest
+import tinvest as ti
 import pandas as pd
 
-from ta.stock import Stock
 from ta import myhelper as mh
 
 
@@ -13,8 +13,8 @@ class Scanner:
         self.client = mh.get_client()
         self.usd_stocks = mh.get_market_data(self.client, 'USD', developing=True)
         self.df = pd.DataFrame(columns=['Ticker', 'Time', 'Open', 'High', 'Low', 'Close', 'Volume',
-                                        'SMA10', 'SMA20', 'SMA50', 'SMA100', 'SMA200',
-                                        'EMA10', 'EMA20', 'EMA50', 'EMA100', 'EMA200',
+                                        'SMA10', 'SMA20', 'SMA100', 'SMA200',
+                                        'EMA10', 'EMA20', 'EMA100', 'EMA200',
                                         'MACD_hist', 'RSI', 'ATR10'])
         self.fill_all_stocks()
 
@@ -28,11 +28,17 @@ class Scanner:
             s.fill_indicators(s.m1)
 
     def sum_df(self):
-        last_values = [[s.ticker] + s.m1.df.tail(1).values.tolist()[0]
+        last_values = [[s.ticker] + s.m1.df.tail(1).values.tolist()[-1]
                        for s in self.usd_stocks.values()]
         self.df = pd.DataFrame(last_values, columns=self.df.columns)\
                   .sort_values(by='Ticker', ascending=True, ignore_index=True)
 
+    async def streaming(self):
+        async with ti.Streaming(mh.get_token()) as streaming:
+            await asyncio.gather(*(streaming.candle.subscribe(s.figi, s.m1.interval)
+                                   for s in self.usd_stocks.values()))
+            async for event in streaming:
+                print(event)
 
     def print_dfs(self):
         print(self.df.to_string())
@@ -45,7 +51,7 @@ class Scanner:
 def overview():
     with open(os.path.join(os.path.expanduser('~'), 'no_commit', 'info.json')) as f:
         data = json.load(f)
-    client = tinvest.SyncClient(data['token_tinkoff_real'])
+    client = ti.SyncClient(data['token_tinkoff_real'])
 
     path_data_dir = os.path.join(os.curdir, 'data')
 

@@ -1,4 +1,5 @@
-set FLASK_APP=main.py
+set FLASK_APP=main_www.py
+set FLASK_ENV=development
 set SECRET_KEY=a12f6509ce1e5886064f24119c73a6aa
 set DATABASE_URI=sqlite:///E:\Work\Code\my_signal_service\data\app.db
 @REM set MAIL_SERVER=localhost

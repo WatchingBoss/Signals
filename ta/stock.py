@@ -90,16 +90,17 @@ class Stock(Instrument):
                                                     interval=tf.interval).payload.candles
                 start -= timedelta(days=1)
                 for c in candles:
-                    candle_list.append([c.time, c.o, c.h, c.l, c.c, c.v])
+                    candle_list.append([c.time + timedelta(hours=3), c.o, c.h, c.l, c.c, c.v])
             except ti.exceptions.TooManyRequestsError:
                 time.sleep(60)
         tf.df = pd.DataFrame(candle_list, columns=['Time', 'Open', 'High', 'Low', 'Close', 'Volume'])\
                 .sort_values(by='Time', ascending=True, ignore_index=True)
+        tf.df['Time'] = tf.df['Time'].apply(lambda t: t.strftime("%y-%m-%d %H:%M"))
 
     def fill_indicators(self, tf: Timeframe):
-        for period in [10, 20, 50, 100, 200]:
+        for period in [10, 20, 50, 200]:
             tf.sma(f'SMA{period}', period)
-        for period in [10, 20, 50, 100, 200]:
+        for period in [10, 20, 50, 200]:
             tf.ema(f'EMA{period}', period)
         tf.macd()
         tf.rsi()
