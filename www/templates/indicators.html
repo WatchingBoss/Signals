@@ -5,7 +5,36 @@
         <p>This is indicators page</p>
     </div>
     <div class="table-responsive" style="font-size: 12px;">
-        {{ table|safe }}
+        <p>Timeframe: min1</p>
+        {{ table_min1|safe }}
+    </div>
+    <div class="table-responsive" style="font-size: 12px;">
+        <p>Timeframe: min5</p>
+        {{ table_min5|safe }}
+    </div>
+    <div class="table-responsive" style="font-size: 12px;">
+        <p>Timeframe: min15</p>
+        {{ table_min15|safe }}
+    </div>
+    <div class="table-responsive" style="font-size: 12px;">
+        <p>Timeframe: min30</p>
+        {{ table_min30|safe }}
+    </div>
+    <div class="table-responsive" style="font-size: 12px;">
+        <p>Timeframe: hour</p>
+        {{ table_hour|safe }}
+    </div>
+    <div class="table-responsive" style="font-size: 12px;">
+        <p>Timeframe: day</p>
+        {{ table_day|safe }}
+    </div>
+    <div class="table-responsive" style="font-size: 12px;">
+        <p>Timeframe: week</p>
+        {{ table_week|safe }}
+    </div>
+    <div class="table-responsive" style="font-size: 12px;">
+        <p>Timeframe: month</p>
+        {{ table_month|safe }}
     </div>
 
 {% endblock %}
