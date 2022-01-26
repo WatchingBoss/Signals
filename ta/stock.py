@@ -2,6 +2,7 @@ from datetime import datetime, timedelta, timezone
 import time
 from ta import scraper
 from ta.indicators import sma, ema, macd, rsi, atr
+from ta.schemas import Interval
 import tinvest as ti
 import pandas as pd
 
@@ -22,7 +23,7 @@ class Timeframe:
     Timeframe implementation
     """
 
-    def __init__(self, interval: ti.CandleResolution):
+    def __init__(self, interval: Interval):
         self.df = pd.DataFrame()
 
         self.interval = interval
@@ -46,12 +47,6 @@ class Timeframe:
         self.df = atr(self.df, period, ['Open', 'High', 'Low', 'Close'])
 
 
-class Event:
-    def __init__(self, tf: Timeframe, msg):
-        self.tf = tf
-        self.msg = msg
-
-
 class Stock(Instrument):
     """
     Stock implementation
@@ -60,9 +55,16 @@ class Stock(Instrument):
         super().__init__(ticker, figi, isin, currency)
         self.shortable = False
 
-        self.m1 = Timeframe(ti.CandleResolution.min1)
-        self.m5 = Timeframe(ti.CandleResolution.min5)
-        self.m15 = Timeframe(ti.CandleResolution.min15)
+        self.timeframes = {
+            Interval.min1: Timeframe(Interval.min1),
+            Interval.min5: Timeframe(Interval.min5),
+            Interval.min15: Timeframe(Interval.min15),
+            Interval.min30: Timeframe(Interval.min30),
+            Interval.hour: Timeframe(Interval.hour),
+            Interval.day: Timeframe(Interval.day),
+            Interval.week: Timeframe(Interval.week),
+            Interval.month: Timeframe(Interval.month),
+        }
 
     def __lt__(self, another):
         return self.ticker < another.ticker
@@ -73,33 +75,52 @@ class Stock(Instrument):
     def check_if_able_for_short(self):
         self.shortable = scraper.check_tinkoff_short_table(self.isin)
 
-    def return_tfs(self):
-        return [self.m1, self.m5, self.m15]
+    def get_intervals(self) -> tuple:
+        return tuple(self.timeframes.keys())
 
     def fill_df(self, client, tf: Timeframe):
+        delta = timedelta(days=1)
+        if tf.interval is Interval.hour:
+            delta = timedelta(days=7)
+        elif tf.interval is Interval.day:
+            delta = timedelta(days=365)
+        elif tf.interval is Interval.week:
+            delta = timedelta(days=365*1.8)
+        elif tf.interval is Interval.month:
+            delta = timedelta(days=365*10)
+
         start = datetime.utcnow()
         list_size = 250
         candle_list = []
-        for _ in range(10):
+        last_date = datetime.utcnow().timestamp()
+        min_date = (datetime.utcnow() - timedelta(minutes=10)).timestamp()
+        while True:
             if len(candle_list) >= list_size:
                 break
+            if min_date < last_date:
+                last_date = min_date
+            else:
+                break
+
             try:
                 candles = client.get_market_candles(self.figi,
-                                                    from_=start - timedelta(days=1),
+                                                    from_=start - delta,
                                                     to=start,
                                                     interval=tf.interval).payload.candles
-                start -= timedelta(days=1)
+                start -= delta
+                if len(candles) < 1:
+                    break
+                min_date = candles[-1].time.timestamp()
                 for c in candles:
-                    candle_list.append([c.time + timedelta(hours=3), c.o, c.h, c.l, c.c, c.v])
+                    candle_list.append([c.time, c.o, c.h, c.l, c.c, c.v])
+
             except ti.exceptions.TooManyRequestsError:
+                print(f"Wating for 60 seconds -> {self.ticker} -> {tf.interval} -> {datetime.now().strftime('%H:%M:%S')}")
                 time.sleep(60)
         tf.df = pd.DataFrame(candle_list, columns=['Time', 'Open', 'High', 'Low', 'Close', 'Volume'])\
                 .sort_values(by='Time', ascending=True, ignore_index=True)
-        tf.df['Time'] = tf.df['Time'].apply(lambda t: t.strftime("%y-%m-%d %H:%M"))
 
     def fill_indicators(self, tf: Timeframe):
-        for period in [10, 20, 50, 200]:
-            tf.sma(f'SMA{period}', period)
         for period in [10, 20, 50, 200]:
             tf.ema(f'EMA{period}', period)
         tf.macd()
