@@ -11,7 +11,7 @@ paths = [os.path.join('data', interval + '.pkl') for interval in intervals]
 if __name__ == "__main__":
     # test()
 
-    scanner = Scanner()
+    scanner = Scanner(intervals)
     scanner.save_df(paths)
     scanner.print_df()
 

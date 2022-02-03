@@ -9,6 +9,10 @@ def get_token() -> str:
     return data['token_tinkoff_real']
 
 
+def get_client() -> ti.SyncClient:
+    return ti.SyncClient(get_token())
+
+
 def get_market_data(client: ti.SyncClient, currency: str, developing: bool=True):
     if developing:
         with open(os.path.join('data', 'work_stocks.txt')) as f:
@@ -22,9 +26,3 @@ def get_market_data(client: ti.SyncClient, currency: str, developing: bool=True)
         payload = client.get_market_stocks().payload
         stocks = [s for s in payload.instruments[:] if s.currency == currency]
         return {s.figi: Stock(s.ticker, s.figi, s.isin, s.currency) for s in stocks}
-
-
-def get_client() -> ti.SyncClient:
-    with open(os.path.join(os.path.expanduser('~'), 'no_commit', 'info.json')) as f:
-        data = json.load(f)
-    return ti.SyncClient(get_token())
