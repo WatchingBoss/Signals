@@ -7,7 +7,7 @@ import pandas as pd
 
 from ta import myhelper as mh
 from ta.stock import Stock
-from ta.schemas import intervals, Interval
+from ta.schemas import Interval
 
 
 TITLE = [
@@ -40,15 +40,26 @@ async def handle_candle(payload: ti.CandleStreaming, stock: Stock):
 
 def test():
     client = mh.get_client()
-    p = client.get_market_search_by_ticker('SPCE').payload.instruments[0]
+    # stocks = list(mh.get_market_data(client, 'USD').values())
+    p = client.get_market_search_by_ticker('WFC').payload.instruments[0]
     s = Stock(ticker=p.ticker, figi=p.figi, isin=p.isin, currency=p.currency)
-    tf = s.timeframes[Interval.week]
-    s.fill_df(client, tf)
-    print(tf.df)
+    interval = Interval.min30
+    s.fill_df(client, interval)
+    print(s.timeframes[interval].df)
+    # for s in stocks:
+    #     s.fill_df(client, interval)
+    # with ThreadPoolExecutor(max_workers=6) as ex:
+    #     [ex.submit(s.fill_indicators, interval) for s in stocks]
+    #
+    # last_values = [[s.ticker] + s.timeframes[interval].df.tail(1).values.tolist()[-1]
+    #                for s in stocks]
+    # df = pd.DataFrame(last_values, columns=TITLE)
+    # print(df.to_string())
 
 
 class Scanner:
-    def __init__(self):
+    def __init__(self, intervals):
+        self.intervals = intervals
         self.client = mh.get_client()
         self.usd_stocks = mh.get_market_data(self.client, 'USD', developing=True)
 
@@ -56,21 +67,21 @@ class Scanner:
         self.fill_indicators()
         self.summeries = [self.sum_df(interval) for interval in intervals]
 
-    def fill_dfs(self):
-        for interval in intervals:
-            with ThreadPoolExecutor(max_workers=6) as executor:
-                [executor.submit(s.fill_df, self.client, s.timeframes[interval]) for s in self.usd_stocks.values()]
+    def fill_dfs(self) -> None:
+        for s in self.usd_stocks.values():
+            for interval in self.intervals:
+                s.fill_df(self.client, interval)
+            print(f"Fill_df done for {s.ticker}")
 
-    def fill_indicators(self):
-        for interval in intervals:
-            with ThreadPoolExecutor(max_workers=6) as executor:
-                [executor.submit(s.fill_indicators, s.timeframes[interval]) for s in self.usd_stocks.values()]
+    def fill_indicators(self) -> None:
+        with ThreadPoolExecutor(max_workers=6) as executor:
+            for interval in self.intervals:
+                [executor.submit(s.fill_indicators, interval) for s in self.usd_stocks.values()]
 
-    async def update_indicators(self):
-        for interval in intervals:
-            with ThreadPoolExecutor(max_workers=6) as executor:
-                [executor.submit(s.fill_indicators, s.timeframes[interval])
-                 for s in self.usd_stocks.values()]
+    async def update_indicators(self) -> None:
+        with ThreadPoolExecutor(max_workers=6) as executor:
+            for interval in self.intervals:
+                [executor.submit(s.fill_indicators, interval) for s in self.usd_stocks.values()]
 
     def sum_df(self, interval: ti.CandleResolution) -> pd.DataFrame:
         last_values = [[s.ticker] + s.timeframes[interval].df.tail(1).values.tolist()[-1]
@@ -80,9 +91,9 @@ class Scanner:
             by='Ticker', ascending=True, ignore_index=True
         )
 
-    async def streaming(self):
+    async def streaming(self) -> None:
         async with ti.Streaming(mh.get_token()) as streaming:
-            for interval in intervals:
+            for interval in self.intervals:
                 await asyncio.gather(*(streaming.candle.subscribe(s.figi, interval)
                                        for s in self.usd_stocks.values()))
             async for event in streaming:
@@ -92,16 +103,16 @@ class Scanner:
         for df in self.summeries:
             print(df.to_string())
 
-    def save_df(self, paths) -> None:
-        for i in range(len(intervals)):
+    def save_df(self, paths: list) -> None:
+        for i in range(len(self.intervals)):
             self.summeries[i].to_pickle(paths[i])
 
-    async def resave_df(self, paths):
+    async def resave_df(self, paths: list) -> None:
         while True:
             print('Resave function')
             await asyncio.sleep(30)
             await self.update_indicators()
-            [self.sum_df(interval) for interval in intervals]
+            self.summeries = [self.sum_df(interval) for interval in self.intervals]
             self.save_df(paths)
             self.print_df()
 
