@@ -78,15 +78,15 @@ class Stock(Instrument):
     def get_intervals(self) -> tuple:
         return tuple(self.timeframes.keys())
 
-    def fill_df(self, client, tf: Timeframe):
+    def fill_df(self, client, interval: Interval):
         delta = timedelta(days=1)
-        if tf.interval is Interval.hour:
+        if interval is Interval.hour:
             delta = timedelta(days=7)
-        elif tf.interval is Interval.day:
+        elif interval is Interval.day:
             delta = timedelta(days=365)
-        elif tf.interval is Interval.week:
+        elif interval is Interval.week:
             delta = timedelta(days=365*1.8)
-        elif tf.interval is Interval.month:
+        elif interval is Interval.month:
             delta = timedelta(days=365*10)
 
         start = datetime.utcnow()
@@ -94,33 +94,40 @@ class Stock(Instrument):
         candle_list = []
         last_date = datetime.utcnow().timestamp()
         min_date = (datetime.utcnow() - timedelta(minutes=10)).timestamp()
-        while True:
+        break_loop = 0
+
+        while break_loop < 4:
             if len(candle_list) >= list_size:
                 break
             if min_date < last_date:
                 last_date = min_date
             else:
-                break
+                break_loop += 1
 
             try:
                 candles = client.get_market_candles(self.figi,
                                                     from_=start - delta,
                                                     to=start,
-                                                    interval=tf.interval).payload.candles
+                                                    interval=interval).payload.candles
+                if len(candles) > 1:
+                    min_date = candles[0].time.timestamp()
+                else:
+                    break_loop += 1
                 start -= delta
-                if len(candles) < 1:
-                    break
-                min_date = candles[-1].time.timestamp()
-                for c in candles:
-                    candle_list.append([c.time, c.o, c.h, c.l, c.c, c.v])
+
+                candle_list += [[c.time, float(c.o), float(c.h), float(c.l), float(c.c), int(c.v)]
+                                for c in candles]
 
             except ti.exceptions.TooManyRequestsError:
-                print(f"Wating for 60 seconds -> {self.ticker} -> {tf.interval} -> {datetime.now().strftime('%H:%M:%S')}")
+                print(f"Wating for 60 seconds -> {self.ticker} -> {interval} -> {datetime.now().strftime('%H:%M:%S')}")
                 time.sleep(60)
-        tf.df = pd.DataFrame(candle_list, columns=['Time', 'Open', 'High', 'Low', 'Close', 'Volume'])\
-                .sort_values(by='Time', ascending=True, ignore_index=True)
+        self.timeframes[interval].df = pd.DataFrame(
+            candle_list,
+            columns=['Time', 'Open', 'High', 'Low', 'Close', 'Volume']
+        ).sort_values(by='Time', ascending=True, ignore_index=True)
 
-    def fill_indicators(self, tf: Timeframe):
+    def fill_indicators(self, interval: Interval):
+        tf = self.timeframes[interval]
         for period in [10, 20, 50, 200]:
             tf.ema(f'EMA{period}', period)
         tf.macd()
