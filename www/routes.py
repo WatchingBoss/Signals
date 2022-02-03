@@ -1,7 +1,8 @@
-from flask import render_template, url_for, g
+from flask import render_template, redirect, url_for, g, request
 from flask_babel import get_locale
 
 from www import app
+from www.forms import ChooseInterval
 
 import pandas as pd
 import os
@@ -21,11 +22,12 @@ def overview():
                            table=df.to_html(classes='table table-striped table-bordered table-sm'))
 
 
-@app.route('/indicators/<interval>')
+@app.route('/indicators/<interval>', methods=['GET'])
 def indicators(interval):
+    form = ChooseInterval(interval=interval)
     df = pd.read_pickle(os.path.join('data', interval + '.pkl'))
     return render_template('indicators.html', title='Indicators',
-                           df=df, interval=interval
+                           df=df, interval=interval, form=form
                            )
 
 

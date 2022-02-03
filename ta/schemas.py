@@ -10,15 +10,3 @@ class Interval(str, Enum):
     day = ti.CandleResolution.day.value
     week = ti.CandleResolution.week.value
     month = ti.CandleResolution.month.value
-
-
-intervals = [
-    Interval.min1,
-    Interval.min5,
-    # Interval.min15,
-    # Interval.min30,
-    # Interval.hour,
-    # Interval.day,
-    # Interval.week,
-    # Interval.month,
-]

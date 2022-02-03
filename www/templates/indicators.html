@@ -4,8 +4,13 @@
     <div>
         <p>This is indicators page</p>
     </div>
-    <div>
-        <p>Interval: {{ interval }}</p>
+    <div class="form">
+        <form method="get" action="">
+            {{ form.hidden_tag() }}
+            <div class="mb-2">
+            {{ form.interval.label }} {{ form.interval() }}
+            </div>
+        </form>
     </div>
     <div class="table-responsive" style="font-size: 12px">
         <table class="table table-light table-bordered table-hover table-sm">
@@ -31,5 +36,22 @@
             </tbody>
         </table>
     </div>
+
+    <script>
+    let interval_select = document.getElementById('interval')
+    interval_select.onchange = function(){
+        let interval = interval_select.value;
+        let current_interval = window.location.href.split('/').pop();
+        let new_href = window.location.href.replace(current_interval, interval);
+        let selected_index = 0;
+        for (let i = 0; i < interval_select.options.length; i++){
+            if (interval_select[i].value === interval){
+                selected_index = i;
+            }
+        }
+        window.location.href = new_href;
+        interval_select.selectedIndex = selected_index;
+ }
+    </script>
 
 {% endblock %}
