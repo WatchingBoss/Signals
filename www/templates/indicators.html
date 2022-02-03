@@ -4,37 +4,32 @@
     <div>
         <p>This is indicators page</p>
     </div>
-    <div class="table-responsive" style="font-size: 12px;">
-        <p>Timeframe: min1</p>
-        {{ table_min1|safe }}
+    <div>
+        <p>Interval: {{ interval }}</p>
     </div>
-    <div class="table-responsive" style="font-size: 12px;">
-        <p>Timeframe: min5</p>
-        {{ table_min5|safe }}
-    </div>
-    <div class="table-responsive" style="font-size: 12px;">
-        <p>Timeframe: min15</p>
-        {{ table_min15|safe }}
-    </div>
-    <div class="table-responsive" style="font-size: 12px;">
-        <p>Timeframe: min30</p>
-        {{ table_min30|safe }}
-    </div>
-    <div class="table-responsive" style="font-size: 12px;">
-        <p>Timeframe: hour</p>
-        {{ table_hour|safe }}
-    </div>
-    <div class="table-responsive" style="font-size: 12px;">
-        <p>Timeframe: day</p>
-        {{ table_day|safe }}
-    </div>
-    <div class="table-responsive" style="font-size: 12px;">
-        <p>Timeframe: week</p>
-        {{ table_week|safe }}
-    </div>
-    <div class="table-responsive" style="font-size: 12px;">
-        <p>Timeframe: month</p>
-        {{ table_month|safe }}
+    <div class="table-responsive" style="font-size: 12px">
+        <table class="table table-light table-bordered table-hover table-sm">
+            <thead>
+            {% for cell in df.columns %}
+                <th>{{ cell }}</th>
+            {% endfor %}
+            </thead>
+            <tbody>
+            {% for index, row in df.iterrows() %}
+                <tr>
+                {% for cell in row %}
+                    {% if cell is integer %}
+                        <td>{{ cell }}</td>
+                    {% elif cell is float %}
+                        <td>{{ cell|round(5) }}</td>
+                    {% else %}
+                        <td>{{ cell|check_value }}</td>
+                    {% endif %}
+                {% endfor %}
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
     </div>
 
 {% endblock %}
