@@ -11,6 +11,14 @@ from ta.stock import Stock
 from ta.schemas import Interval
 
 
+SUM_COLUMNS = [
+    'Ticker', 'Time', 'Open', 'High', 'Low', 'Close', 'Volume',
+    'EMA_10', 'EMA_20', 'EMA_50', 'EMA_200',
+    'RSI_10',
+    'MACD', 'MACD_Hist', 'MACD_Signal'
+]
+
+
 def update_raw(df: pd.DataFrame, payload: ti.CandleStreaming) -> pd.DataFrame:
     df.loc[-1, 'Time'] = payload.time
     df.loc[-1, 'Open'] = payload.o
@@ -34,23 +42,27 @@ async def handle_candle(payload: ti.CandleStreaming, stock: Stock):
 
 def test():
     client = mh.get_client()
-    # stocks = list(mh.get_market_data(client, 'USD').values())
-    p = client.get_market_search_by_ticker('WFC').payload.instruments[0]
-    s = Stock(ticker=p.ticker, figi=p.figi, isin=p.isin, currency=p.currency)
-    interval = Interval.hour
-    s.fill_df(client, interval)
-    s.fill_indicators(interval)
-    print(s.timeframes[interval].df.to_string())
-    print(s.timeframes[interval].df.count())
-    # for s in stocks:
-    #     s.fill_df(client, interval)
-    # with ThreadPoolExecutor(max_workers=6) as ex:
-    #     [ex.submit(s.fill_indicators, interval) for s in stocks]
-    #
-    # last_values = [[s.ticker] + s.timeframes[interval].df.tail(1).values.tolist()[-1]
-    #                for s in stocks]
-    # df = pd.DataFrame(last_values, columns=TITLE)
-    # print(df.to_string())
+    stocks = list(mh.get_market_data(client, 'USD').values())
+    # p = client.get_market_search_by_ticker('SPCE').payload.instruments[0]
+    # s = Stock(ticker=p.ticker, figi=p.figi, isin=p.isin, currency=p.currency)
+    interval = Interval.month
+    # s.fill_df(client, interval)
+    # s.fill_indicators(interval)
+    # print(s.timeframes[interval].df.to_string())
+    # print(s.timeframes[interval].df.count())
+    for s in stocks:
+        s.fill_df(client, interval)
+    with ThreadPoolExecutor(max_workers=6) as ex:
+        [ex.submit(s.fill_indicators, interval) for s in stocks]
+
+    last_values = [[s.ticker] + s.timeframes[interval].df.tail(1).values.tolist()[-1]
+                   for s in stocks]
+
+    title = ['Ticker'] + list(stocks[0].timeframes[interval].df.columns)
+    df = pd.DataFrame(last_values, columns=title)
+    print(df.to_string())
+    print(f"Length of last_values: {len(last_values[0])}\n"
+          f"Length of title: {len(title)}")
 
 
 class Scanner:
@@ -61,7 +73,7 @@ class Scanner:
 
         self.fill_dfs()
         self.fill_indicators()
-        self.title_summery_ta = ['Ticker'] + list(list(self.usd_stocks.values())[0].timeframes[Interval.min1].df.columns)
+        self.title_summery_ta = ['Ticker'] + list(list(self.usd_stocks.values())[0].timeframes[self.intervals[0]].df.columns)
         self.summeries = [self.sum_df(interval) for interval in intervals]
 
     def fill_dfs(self) -> None:
@@ -107,8 +119,9 @@ class Scanner:
     async def resave_df(self, paths: list) -> None:
         while True:
             print('Resave function')
-            await asyncio.sleep(30)
-            await self.update_indicators()
+            await asyncio.sleep(10)
+            self.fill_indicators()
+            # await self.update_indicators()
             self.summeries = [self.sum_df(interval) for interval in self.intervals]
             self.save_df(paths)
             self.print_df()

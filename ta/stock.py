@@ -15,7 +15,7 @@ FirstStrategy = ta.Strategy(
         {'kind': 'ema', 'length': 50},
         {'kind': 'ema', 'length': 200},
         {'kind': 'rsi'},
-        {'kind': 'macd', 'fast': 12, 'slow': 26, 'signal': 9},
+        {'kind': 'macd', 'fast': 12, 'slow': 26, 'signal': 9, 'col_names': ('MACD', 'MACD_Hist', 'MACD_Signal')},
     ]
 )
 
@@ -49,6 +49,7 @@ class Timeframe:
     """
     def __init__(self, interval: Interval):
         self.df = pd.DataFrame()
+        self.cdl = pd.DataFrame()
         self.interval = interval
 
 
@@ -133,22 +134,22 @@ class Stock(Instrument):
 
     def fill_indicators(self, interval: Interval):
         tf = self.timeframes[interval]
-        tf.df.ta.cores = 0
-        tf.df.ta.strategy(FirstStrategy)
+        # tf.df.ta.cores = 0
+        # tf.df.ta.strategy(FirstStrategy)
+
+        tf.df['EMA_10'] = ta.ema(tf.df['Close'], length=10)
+        tf.df['EMA_20'] = ta.ema(tf.df['Close'], length=20)
+        tf.df['EMA_50'] = ta.ema(tf.df['Close'], length=50)
+        tf.df['EMA_200'] = ta.ema(tf.df['Close'], length=200)
+        tf.df['RSI_14'] = ta.rsi(tf.df['Close'])
+        tf.df[['MACD', 'MACD_Hist', 'MACD_Signal']] = ta.macd(tf.df['Close'], fast=12, slow=26, signal=9)
 
         # temp = tf.df.copy()
         # temp['Time'] = temp['Time'].apply(lambda x: x.replace(tzinfo=None))
         # temp = temp.set_index(pd.DatetimeIndex(tf.df['Time']))
         # tf.df['VWAP'] = temp.ta.vwap().values
 
-        cdl_df = tf.df.ta.cdl_pattern(name=['hammer', 'invertedhammer', 'engulfing'])
-        tf.df = pd.concat([tf.df, cdl_df], axis=1)
-
-        tf.df.rename(columns={
-            'MACD_12_26_9': 'MACD',
-            'MACDh_12_26_9': 'MACD_Hist',
-            'MACDs_12_26_9': 'MACD_Signal',
-        }, inplace=True)
+        tf.cdl = tf.df.ta.cdl_pattern(name=['hammer', 'invertedhammer', 'engulfing'])
 
     def fill_df_yahoo(self, interval):
         tf = self.timeframes[interval]
