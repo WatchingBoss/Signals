@@ -1,10 +1,35 @@
 from datetime import datetime, timedelta, timezone
 import time
 from ta import scraper
-from ta.indicators import sma, ema, macd, rsi, atr
 from ta.schemas import Interval
 import tinvest as ti
 import pandas as pd
+import pandas_ta as ta
+
+
+FirstStrategy = ta.Strategy(
+    name='First Strategy',
+    ta=[
+        {'kind': 'ema', 'length': 10},
+        {'kind': 'ema', 'length': 20},
+        {'kind': 'ema', 'length': 50},
+        {'kind': 'ema', 'length': 200},
+        {'kind': 'rsi'},
+        {'kind': 'macd', 'fast': 12, 'slow': 26, 'signal': 9},
+    ]
+)
+
+
+YahooIntervals = {
+    Interval.min1: '1m',
+    Interval.min5: '5m',
+    Interval.min15: '15m',
+    Interval.min30: '30m',
+    Interval.hour: '1h',
+    Interval.day: '1d',
+    Interval.week: '1wk',
+    Interval.month: '1mo'
+}
 
 
 class Instrument:
@@ -22,29 +47,9 @@ class Timeframe:
     """
     Timeframe implementation
     """
-
     def __init__(self, interval: Interval):
         self.df = pd.DataFrame()
-
         self.interval = interval
-        self.delta = timedelta(hours=6, minutes=30)
-
-        self.last_modify_time = datetime.now(tz=timezone.utc)
-
-    def sma(self, column_name, period):
-        self.df = sma(self.df, 'Close', column_name, period)
-
-    def ema(self, column_name, period):
-        self.df = ema(self.df, 'Close', column_name, period, False)
-
-    def macd(self):
-        self.df = macd(self.df, 12, 26, 9, 'Close')
-
-    def rsi(self):
-        self.df = rsi(self.df, 'Close', 14)
-
-    def atr(self, period):
-        self.df = atr(self.df, period, ['Open', 'High', 'Low', 'Close'])
 
 
 class Stock(Instrument):
@@ -69,9 +74,6 @@ class Stock(Instrument):
     def __lt__(self, another):
         return self.ticker < another.ticker
 
-    async def __aiter__(self):
-        return self
-
     def check_if_able_for_short(self):
         self.shortable = scraper.check_tinkoff_short_table(self.isin)
 
@@ -79,6 +81,8 @@ class Stock(Instrument):
         return tuple(self.timeframes.keys())
 
     def fill_df(self, client, interval: Interval):
+        tf = self.timeframes[interval]
+
         delta = timedelta(days=1)
         if interval is Interval.hour:
             delta = timedelta(days=7)
@@ -121,15 +125,31 @@ class Stock(Instrument):
             except ti.exceptions.TooManyRequestsError:
                 print(f"Wating for 60 seconds -> {self.ticker} -> {interval} -> {datetime.now().strftime('%H:%M:%S')}")
                 time.sleep(60)
-        self.timeframes[interval].df = pd.DataFrame(
+
+        tf.df = pd.DataFrame(
             candle_list,
             columns=['Time', 'Open', 'High', 'Low', 'Close', 'Volume']
         ).sort_values(by='Time', ascending=True, ignore_index=True)
 
     def fill_indicators(self, interval: Interval):
         tf = self.timeframes[interval]
-        for period in [10, 20, 50, 200]:
-            tf.ema(f'EMA{period}', period)
-        tf.macd()
-        tf.rsi()
-        tf.atr(10)
+        tf.df.ta.cores = 0
+        tf.df.ta.strategy(FirstStrategy)
+
+        # temp = tf.df.copy()
+        # temp['Time'] = temp['Time'].apply(lambda x: x.replace(tzinfo=None))
+        # temp = temp.set_index(pd.DatetimeIndex(tf.df['Time']))
+        # tf.df['VWAP'] = temp.ta.vwap().values
+
+        cdl_df = tf.df.ta.cdl_pattern(name=['hammer', 'invertedhammer', 'engulfing'])
+        tf.df = pd.concat([tf.df, cdl_df], axis=1)
+
+        tf.df.rename(columns={
+            'MACD_12_26_9': 'MACD',
+            'MACDh_12_26_9': 'MACD_Hist',
+            'MACDs_12_26_9': 'MACD_Signal',
+        }, inplace=True)
+
+    def fill_df_yahoo(self, interval):
+        tf = self.timeframes[interval]
+        tf.df = tf.df.ta.ticker(self.ticker, period='1mo', interval=YahooIntervals[interval])

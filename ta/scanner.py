@@ -1,4 +1,5 @@
-import os, json, datetime
+import os, json
+from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 import asyncio
 
@@ -8,13 +9,6 @@ import pandas as pd
 from ta import myhelper as mh
 from ta.stock import Stock
 from ta.schemas import Interval
-
-
-TITLE = [
-    'Ticker', 'Time', 'Open', 'High', 'Low', 'Close', 'Volume',
-    'EMA10', 'EMA20', 'EMA100', 'EMA200',
-    'MACD_hist', 'RSI', 'ATR10'
-    ]
 
 
 def update_raw(df: pd.DataFrame, payload: ti.CandleStreaming) -> pd.DataFrame:
@@ -43,9 +37,11 @@ def test():
     # stocks = list(mh.get_market_data(client, 'USD').values())
     p = client.get_market_search_by_ticker('WFC').payload.instruments[0]
     s = Stock(ticker=p.ticker, figi=p.figi, isin=p.isin, currency=p.currency)
-    interval = Interval.min30
+    interval = Interval.hour
     s.fill_df(client, interval)
-    print(s.timeframes[interval].df)
+    s.fill_indicators(interval)
+    print(s.timeframes[interval].df.to_string())
+    print(s.timeframes[interval].df.count())
     # for s in stocks:
     #     s.fill_df(client, interval)
     # with ThreadPoolExecutor(max_workers=6) as ex:
@@ -65,6 +61,7 @@ class Scanner:
 
         self.fill_dfs()
         self.fill_indicators()
+        self.title_summery_ta = ['Ticker'] + list(list(self.usd_stocks.values())[0].timeframes[Interval.min1].df.columns)
         self.summeries = [self.sum_df(interval) for interval in intervals]
 
     def fill_dfs(self) -> None:
@@ -87,7 +84,7 @@ class Scanner:
         last_values = [[s.ticker] + s.timeframes[interval].df.tail(1).values.tolist()[-1]
                        for s in self.usd_stocks.values()]
         print(f"{interval} Done")
-        return pd.DataFrame(last_values, columns=TITLE).sort_values(
+        return pd.DataFrame(last_values, columns=self.title_summery_ta).sort_values(
             by='Ticker', ascending=True, ignore_index=True
         )
 
