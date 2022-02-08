@@ -8,15 +8,7 @@ import pandas as pd
 
 from ta import myhelper as mh
 from ta.stock import Stock
-from ta.schemas import Interval
-
-
-SUM_COLUMNS = [
-    'Ticker', 'Time', 'Open', 'High', 'Low', 'Close', 'Volume',
-    'EMA_10', 'EMA_20', 'EMA_50', 'EMA_200',
-    'RSI_10',
-    'MACD', 'MACD_Hist', 'MACD_Signal'
-]
+from ta.schemas import Interval, SUMMERY_COLUMNS
 
 
 def update_raw(df: pd.DataFrame, payload: ti.CandleStreaming) -> pd.DataFrame:
@@ -41,28 +33,36 @@ async def handle_candle(payload: ti.CandleStreaming, stock: Stock):
 
 
 def test():
+    interval = Interval.month
     client = mh.get_client()
     stocks = list(mh.get_market_data(client, 'USD').values())
-    # p = client.get_market_search_by_ticker('SPCE').payload.instruments[0]
+    # p = client.get_market_search_by_ticker('CNK').payload.instruments[0]
     # s = Stock(ticker=p.ticker, figi=p.figi, isin=p.isin, currency=p.currency)
-    interval = Interval.month
     # s.fill_df(client, interval)
     # s.fill_indicators(interval)
     # print(s.timeframes[interval].df.to_string())
     # print(s.timeframes[interval].df.count())
     for s in stocks:
         s.fill_df(client, interval)
-    with ThreadPoolExecutor(max_workers=6) as ex:
+    with ThreadPoolExecutor(max_workers=5) as ex:
         [ex.submit(s.fill_indicators, interval) for s in stocks]
 
-    last_values = [[s.ticker] + s.timeframes[interval].df.tail(1).values.tolist()[-1]
-                   for s in stocks]
+    # for s in stocks:
+    #     s.fill_indicators(interval)
 
-    title = ['Ticker'] + list(stocks[0].timeframes[interval].df.columns)
-    df = pd.DataFrame(last_values, columns=title)
+    summery = []
+    for s in stocks:
+        last_values = []
+        for column in SUMMERY_COLUMNS[1:]:
+            try:
+                last_values.append(s.timeframes[interval].df.iloc[-1][column])
+            except KeyError:
+                print(f"Ticker: {s.ticker}\tColumn: {column}\tLenght of Close: {s.timeframes[interval].df['Close'].count()}")
+                last_values.append(None)
+        summery.append([s.ticker] + last_values)
+
+    df = pd.DataFrame(summery, columns=SUMMERY_COLUMNS)
     print(df.to_string())
-    print(f"Length of last_values: {len(last_values[0])}\n"
-          f"Length of title: {len(title)}")
 
 
 class Scanner:
@@ -73,7 +73,6 @@ class Scanner:
 
         self.fill_dfs()
         self.fill_indicators()
-        self.title_summery_ta = ['Ticker'] + list(list(self.usd_stocks.values())[0].timeframes[self.intervals[0]].df.columns)
         self.summeries = [self.sum_df(interval) for interval in intervals]
 
     def fill_dfs(self) -> None:
@@ -93,10 +92,18 @@ class Scanner:
                 [executor.submit(s.fill_indicators, interval) for s in self.usd_stocks.values()]
 
     def sum_df(self, interval: ti.CandleResolution) -> pd.DataFrame:
-        last_values = [[s.ticker] + s.timeframes[interval].df.tail(1).values.tolist()[-1]
-                       for s in self.usd_stocks.values()]
+        summery = []
+        for s in self.usd_stocks.values():
+            last_values = []
+            for column in SUMMERY_COLUMNS[1:]:
+                try:
+                    last_values.append(s.timeframes[interval].df.iloc[-1][column])
+                except KeyError:
+                    last_values.append(None)
+            summery.append([s.ticker] + last_values)
+
         print(f"{interval} Done")
-        return pd.DataFrame(last_values, columns=self.title_summery_ta).sort_values(
+        return pd.DataFrame(summery, columns=SUMMERY_COLUMNS).sort_values(
             by='Ticker', ascending=True, ignore_index=True
         )
 
@@ -151,4 +158,3 @@ def overview():
 
     pkl_file = os.path.join(path_data_dir, 'overview.pkl')
     df.to_pickle(pkl_file)
-

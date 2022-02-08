@@ -11,11 +11,11 @@ class Config(object):
 
 
 intervals = [
-    Interval.min1,
-    Interval.min5,
-    Interval.min15,
-    Interval.min30,
-    Interval.hour,
+    # Interval.min1,
+    # Interval.min5,
+    # Interval.min15,
+    # Interval.min30,
+    # Interval.hour,
     Interval.day,
     Interval.week,
     Interval.month,

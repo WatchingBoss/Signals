@@ -1,35 +1,10 @@
 from datetime import datetime, timedelta, timezone
 import time
 from ta import scraper
-from ta.schemas import Interval
+from ta.schemas import Interval, YahooIntervals
 import tinvest as ti
 import pandas as pd
 import pandas_ta as ta
-
-
-FirstStrategy = ta.Strategy(
-    name='First Strategy',
-    ta=[
-        {'kind': 'ema', 'length': 10},
-        {'kind': 'ema', 'length': 20},
-        {'kind': 'ema', 'length': 50},
-        {'kind': 'ema', 'length': 200},
-        {'kind': 'rsi'},
-        {'kind': 'macd', 'fast': 12, 'slow': 26, 'signal': 9, 'col_names': ('MACD', 'MACD_Hist', 'MACD_Signal')},
-    ]
-)
-
-
-YahooIntervals = {
-    Interval.min1: '1m',
-    Interval.min5: '5m',
-    Interval.min15: '15m',
-    Interval.min30: '30m',
-    Interval.hour: '1h',
-    Interval.day: '1d',
-    Interval.week: '1wk',
-    Interval.month: '1mo'
-}
 
 
 class Instrument:
@@ -134,15 +109,13 @@ class Stock(Instrument):
 
     def fill_indicators(self, interval: Interval):
         tf = self.timeframes[interval]
-        # tf.df.ta.cores = 0
-        # tf.df.ta.strategy(FirstStrategy)
 
         tf.df['EMA_10'] = ta.ema(tf.df['Close'], length=10)
         tf.df['EMA_20'] = ta.ema(tf.df['Close'], length=20)
         tf.df['EMA_50'] = ta.ema(tf.df['Close'], length=50)
         tf.df['EMA_200'] = ta.ema(tf.df['Close'], length=200)
         tf.df['RSI_14'] = ta.rsi(tf.df['Close'])
-        tf.df[['MACD', 'MACD_Hist', 'MACD_Signal']] = ta.macd(tf.df['Close'], fast=12, slow=26, signal=9)
+        tf.df[['MACD_12_26_9', 'MACDh_12_26_9', 'MACDs_12_26_9']] = ta.macd(tf.df['Close'], fast=12, slow=26, signal=9)
 
         # temp = tf.df.copy()
         # temp['Time'] = temp['Time'].apply(lambda x: x.replace(tzinfo=None))
