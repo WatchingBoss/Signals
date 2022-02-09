@@ -1,5 +1,6 @@
 import os, json
-from datetime import datetime
+from datetime import datetime, timedelta
+import itertools
 from concurrent.futures import ThreadPoolExecutor
 import asyncio
 
@@ -9,46 +10,45 @@ import pandas as pd
 from ta import myhelper as mh
 from ta.stock import Stock
 from ta.schemas import Interval, SUMMERY_COLUMNS
+from ta.variables import DELTAS
 
 
-def update_raw(df: pd.DataFrame, payload: ti.CandleStreaming) -> pd.DataFrame:
-    df.loc[-1, 'Time'] = payload.time
-    df.loc[-1, 'Open'] = payload.o
-    df.loc[-1, 'High'] = payload.h
-    df.loc[-1, 'Low'] = payload.l
-    df.loc[-1, 'Close'] = payload.c
-    df.loc[-1, 'Volume'] = payload.v
-    return df
+# TODO: Save candles to file
+# TODO: Check if candles in file, get df and update before now
+# TODO: Streaming for 1min-day
+# TODO: Update week and month by candle_market each week
+# TODO: Signal for previous candle in every timeframe
+
+
+def update_raw(df: pd.DataFrame, last_row: int, payload: ti.CandleStreaming) -> None:
+    df.loc[last_row, 'Time'] = payload.time
+    df.loc[last_row, 'Open'] = payload.o
+    df.loc[last_row, 'High'] = payload.h
+    df.loc[last_row, 'Low'] = payload.l
+    df.loc[last_row, 'Close'] = payload.c
+    df.loc[last_row, 'Volume'] = payload.v
 
 
 async def handle_candle(payload: ti.CandleStreaming, stock: Stock):
     tf = stock.timeframes[payload.interval]
-    if tf.df['Time'].iat[-1] < payload.time:
-        print(f'{stock.ticker}: New row')
-        tf.df.append(pd.Series(), ignore_index=True)
-        tf.df = update_raw(tf.df, payload)
-    elif tf.df['Time'].iat[-1] == payload.time:
-        print(f'{stock.ticker}: Update this raw')
-        tf.df = update_raw(tf.df, payload)
+    last_row = tf.df.index[-1]
+    if (payload.time - tf.df['Time'].iat[last_row]) >= DELTAS[tf.interval]:
+        pd.concat([tf.df, pd.DataFrame(pd.Series(dtype=int))], axis=0)
+        last_row += 1
+    update_raw(tf.df, last_row, payload)
 
 
 def test():
-    interval = Interval.month
+    interval = Interval.hour
     client = mh.get_client()
     stocks = list(mh.get_market_data(client, 'USD').values())
-    # p = client.get_market_search_by_ticker('CNK').payload.instruments[0]
+    # p = client.get_market_search_by_ticker('MSFT').payload.instruments[0]
     # s = Stock(ticker=p.ticker, figi=p.figi, isin=p.isin, currency=p.currency)
-    # s.fill_df(client, interval)
-    # s.fill_indicators(interval)
-    # print(s.timeframes[interval].df.to_string())
-    # print(s.timeframes[interval].df.count())
+
     for s in stocks:
         s.fill_df(client, interval)
     with ThreadPoolExecutor(max_workers=5) as ex:
         [ex.submit(s.fill_indicators, interval) for s in stocks]
-
-    # for s in stocks:
-    #     s.fill_indicators(interval)
 
     summery = []
     for s in stocks:
@@ -69,7 +69,7 @@ class Scanner:
     def __init__(self, intervals):
         self.intervals = intervals
         self.client = mh.get_client()
-        self.usd_stocks = mh.get_market_data(self.client, 'USD', developing=True)
+        self.usd_stocks = dict(itertools.islice(mh.get_market_data(self.client, 'USD', developing=True).items(), 1))
 
         self.fill_dfs()
         self.fill_indicators()
@@ -95,9 +95,10 @@ class Scanner:
         summery = []
         for s in self.usd_stocks.values():
             last_values = []
+            last_row = s.timeframes[interval].df.index[-1]
             for column in SUMMERY_COLUMNS[1:]:
                 try:
-                    last_values.append(s.timeframes[interval].df.iloc[-1][column])
+                    last_values.append(s.timeframes[interval].df.iloc[last_row][column])
                 except KeyError:
                     last_values.append(None)
             summery.append([s.ticker] + last_values)
@@ -126,9 +127,8 @@ class Scanner:
     async def resave_df(self, paths: list) -> None:
         while True:
             print('Resave function')
-            await asyncio.sleep(10)
+            await asyncio.sleep(60)
             self.fill_indicators()
-            # await self.update_indicators()
             self.summeries = [self.sum_df(interval) for interval in self.intervals]
             self.save_df(paths)
             self.print_df()

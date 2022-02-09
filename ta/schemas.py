@@ -27,7 +27,8 @@ YahooIntervals = {
 
 
 SUMMERY_COLUMNS = [
-    'Ticker', 'Time', 'Open', 'High', 'Low', 'Close', 'Volume',
+    'Ticker',
+    'Time', 'Open', 'High', 'Low', 'Close', 'Volume',
     'EMA_10', 'EMA_20', 'EMA_50', 'EMA_200',
     'RSI_14',
     'MACDh_12_26_9'

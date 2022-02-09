@@ -11,7 +11,7 @@ class Config(object):
 
 
 intervals = [
-    # Interval.min1,
+    Interval.min1,
     # Interval.min5,
     # Interval.min15,
     # Interval.min30,

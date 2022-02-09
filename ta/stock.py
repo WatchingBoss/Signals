@@ -2,6 +2,7 @@ from datetime import datetime, timedelta, timezone
 import time
 from ta import scraper
 from ta.schemas import Interval, YahooIntervals
+from ta.variables import DELTAS, PERIODS
 import tinvest as ti
 import pandas as pd
 import pandas_ta as ta
@@ -44,7 +45,7 @@ class Stock(Instrument):
             Interval.hour: Timeframe(Interval.hour),
             Interval.day: Timeframe(Interval.day),
             Interval.week: Timeframe(Interval.week),
-            Interval.month: Timeframe(Interval.month),
+            Interval.month: Timeframe(Interval.month)
         }
 
     def __lt__(self, another):
@@ -59,17 +60,7 @@ class Stock(Instrument):
     def fill_df(self, client, interval: Interval):
         tf = self.timeframes[interval]
 
-        delta = timedelta(days=1)
-        if interval is Interval.hour:
-            delta = timedelta(days=7)
-        elif interval is Interval.day:
-            delta = timedelta(days=365)
-        elif interval is Interval.week:
-            delta = timedelta(days=365*1.8)
-        elif interval is Interval.month:
-            delta = timedelta(days=365*10)
-
-        start = datetime.utcnow()
+        now = datetime.utcnow()
         list_size = 250
         candle_list = []
         last_date = datetime.utcnow().timestamp()
@@ -86,14 +77,14 @@ class Stock(Instrument):
 
             try:
                 candles = client.get_market_candles(self.figi,
-                                                    from_=start - delta,
-                                                    to=start,
+                                                    from_=now - PERIODS[interval],
+                                                    to=now,
                                                     interval=interval).payload.candles
                 if len(candles) > 1:
                     min_date = candles[0].time.timestamp()
                 else:
                     break_loop += 1
-                start -= delta
+                now -= PERIODS[interval]
 
                 candle_list += [[c.time, float(c.o), float(c.h), float(c.l), float(c.c), int(c.v)]
                                 for c in candles]
