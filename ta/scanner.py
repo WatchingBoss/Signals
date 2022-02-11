@@ -15,7 +15,7 @@ from ta.variables import DELTAS
 
 # TODO: Save candles to file
 # TODO: Check if candles in file, get df and update before now
-# TODO: Streaming for 1min-day
+# TODO: Streaming for 1min-day timeframes
 # TODO: Update week and month by candle_market each week
 # TODO: Signal for previous candle in every timeframe
 
@@ -38,31 +38,45 @@ async def handle_candle(payload: ti.CandleStreaming, stock: Stock):
     update_raw(tf.df, last_row, payload)
 
 
-def test():
-    interval = Interval.hour
+def test(paths):
+    intervals = [
+        Interval.min1,
+        Interval.min5,
+        Interval.min15,
+        Interval.min30,
+        Interval.hour,
+        Interval.day,
+        Interval.week,
+        Interval.month,
+    ]
+
+    # interval = Interval.hour
     client = mh.get_client()
-    stocks = list(mh.get_market_data(client, 'USD').values())
+    stocks = mh.get_market_data(client, 'USD', developing=True)
     # p = client.get_market_search_by_ticker('MSFT').payload.instruments[0]
     # s = Stock(ticker=p.ticker, figi=p.figi, isin=p.isin, currency=p.currency)
-
-    for s in stocks:
-        s.fill_df(client, interval)
+    for s in stocks.values():
+        for interval in intervals:
+            s.fill_df(client, interval, paths.candles_dir)
+            s.save_candles(interval, paths.candles_dir)
     with ThreadPoolExecutor(max_workers=5) as ex:
-        [ex.submit(s.fill_indicators, interval) for s in stocks]
+        for interval in intervals:
+            [ex.submit(s.fill_indicators, interval) for s in stocks.values()]
 
-    summery = []
-    for s in stocks:
-        last_values = []
-        for column in SUMMERY_COLUMNS[1:]:
-            try:
-                last_values.append(s.timeframes[interval].df.iloc[-1][column])
-            except KeyError:
-                print(f"Ticker: {s.ticker}\tColumn: {column}\tLenght of Close: {s.timeframes[interval].df['Close'].count()}")
-                last_values.append(None)
-        summery.append([s.ticker] + last_values)
+    for interval in intervals:
+        summery = []
+        for s in stocks.values():
+            last_values = []
+            for column in SUMMERY_COLUMNS[1:]:
+                try:
+                    last_values.append(s.timeframes[interval].df.iloc[-1][column])
+                except KeyError:
+                    print(f"Ticker: {s.ticker}\tColumn: {column}\tLenght of Close: {s.timeframes[interval].df['Close'].count()}")
+                    last_values.append(None)
+            summery.append([s.ticker] + last_values)
 
-    df = pd.DataFrame(summery, columns=SUMMERY_COLUMNS)
-    print(df.to_string())
+        df = pd.DataFrame(summery, columns=SUMMERY_COLUMNS)
+        print(df.to_string())
 
 
 class Scanner:

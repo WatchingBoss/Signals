@@ -3,6 +3,10 @@ from ta.schemas import Interval
 
 basedir = os.path.abspath(os.path.dirname(__file__))
 
+class PATHS(object):
+    data_dir = os.path.join(basedir, 'data')
+    candles_dir = os.path.join(data_dir, 'candles')
+
 
 class Config(object):
     SECRET_KEY = os.environ.get('SECRET_KEY')
