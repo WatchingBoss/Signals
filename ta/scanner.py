@@ -9,12 +9,10 @@ import pandas as pd
 
 from ta import myhelper as mh
 from ta.stock import Stock
-from ta.schemas import Interval, SUMMERY_COLUMNS
+from ta.schemas import Interval, SUM_COLUMNS
 from ta.variables import DELTAS
 
 
-# TODO: Save candles to file
-# TODO: Check if candles in file, get df and update before now
 # TODO: Streaming for 1min-day timeframes
 # TODO: Update week and month by candle_market each week
 # TODO: Signal for previous candle in every timeframe
@@ -38,7 +36,7 @@ async def handle_candle(payload: ti.CandleStreaming, stock: Stock):
     update_raw(tf.df, last_row, payload)
 
 
-def test(paths):
+def test():
     intervals = [
         Interval.min1,
         Interval.min5,
@@ -50,16 +48,20 @@ def test(paths):
         Interval.month,
     ]
 
-    # interval = Interval.hour
+    # interval = Interval.min1
     client = mh.get_client()
     stocks = mh.get_market_data(client, 'USD', developing=True)
-    # p = client.get_market_search_by_ticker('MSFT').payload.instruments[0]
+    # p = client.get_market_search_by_ticker('SPCE').payload.instruments[0]
     # s = Stock(ticker=p.ticker, figi=p.figi, isin=p.isin, currency=p.currency)
+
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        for interval in intervals:
+            [ex.submit(s.read_candles, interval) for s in stocks.values()]
     for s in stocks.values():
         for interval in intervals:
-            s.fill_df(client, interval, paths.candles_dir)
-            s.save_candles(interval, paths.candles_dir)
-    with ThreadPoolExecutor(max_workers=5) as ex:
+            s.fill_df(client, interval)
+            s.save_candles(interval)
+    with ThreadPoolExecutor(max_workers=8) as ex:
         for interval in intervals:
             [ex.submit(s.fill_indicators, interval) for s in stocks.values()]
 
@@ -67,7 +69,7 @@ def test(paths):
         summery = []
         for s in stocks.values():
             last_values = []
-            for column in SUMMERY_COLUMNS[1:]:
+            for column in SUM_COLUMNS[1:]:
                 try:
                     last_values.append(s.timeframes[interval].df.iloc[-1][column])
                 except KeyError:
@@ -75,7 +77,7 @@ def test(paths):
                     last_values.append(None)
             summery.append([s.ticker] + last_values)
 
-        df = pd.DataFrame(summery, columns=SUMMERY_COLUMNS)
+        df = pd.DataFrame(summery, columns=SUM_COLUMNS)
         print(df.to_string())
 
 
@@ -83,17 +85,23 @@ class Scanner:
     def __init__(self, intervals):
         self.intervals = intervals
         self.client = mh.get_client()
-        self.usd_stocks = dict(itertools.islice(mh.get_market_data(self.client, 'USD', developing=True).items(), 1))
+        self.usd_stocks = mh.get_market_data(self.client, 'USD', developing=True)
 
         self.fill_dfs()
         self.fill_indicators()
         self.summeries = [self.sum_df(interval) for interval in intervals]
 
     def fill_dfs(self) -> None:
+        with ThreadPoolExecutor(max_workers=8) as ex:
+            for interval in self.intervals:
+                [ex.submit(s.read_candles, interval) for s in self.usd_stocks.values()]
         for s in self.usd_stocks.values():
             for interval in self.intervals:
                 s.fill_df(self.client, interval)
             print(f"Fill_df done for {s.ticker}")
+        with ThreadPoolExecutor(max_workers=8) as ex:
+            for interval in self.intervals:
+                [ex.submit(s.save_candles, interval) for s in self.usd_stocks.values()]
 
     def fill_indicators(self) -> None:
         with ThreadPoolExecutor(max_workers=6) as executor:
@@ -109,16 +117,15 @@ class Scanner:
         summery = []
         for s in self.usd_stocks.values():
             last_values = []
-            last_row = s.timeframes[interval].df.index[-1]
-            for column in SUMMERY_COLUMNS[1:]:
+            for column in SUM_COLUMNS[1:]:
                 try:
-                    last_values.append(s.timeframes[interval].df.iloc[last_row][column])
+                    last_values.append(s.timeframes[interval].df[column].iat[-1])
                 except KeyError:
                     last_values.append(None)
             summery.append([s.ticker] + last_values)
 
         print(f"{interval} Done")
-        return pd.DataFrame(summery, columns=SUMMERY_COLUMNS).sort_values(
+        return pd.DataFrame(summery, columns=SUM_COLUMNS).sort_values(
             by='Ticker', ascending=True, ignore_index=True
         )
 
@@ -136,7 +143,11 @@ class Scanner:
 
     def save_df(self, paths: list) -> None:
         for i in range(len(self.intervals)):
-            self.summeries[i].to_pickle(paths[i])
+            df = self.summeries[i]
+            df['Ticker'] = df['Ticker'].astype(str)
+            df['Time'] = pd.to_datetime(df['Time'], errors='raise', utc=True)
+            df[SUM_COLUMNS[2:]] = df[SUM_COLUMNS[2:]].apply(pd.to_numeric, errors='raise')
+            self.summeries[i].to_hdf(paths[i], key='df', mode='w')
 
     async def resave_df(self, paths: list) -> None:
         while True:

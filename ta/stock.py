@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
 import time, os
+from config import Paths
 from ta import scraper
 from ta.schemas import Interval, YahooIntervals
 from ta.variables import DELTAS, PERIODS
@@ -54,30 +55,28 @@ class Stock(Instrument):
     def check_if_able_for_short(self):
         self.shortable = scraper.check_tinkoff_short_table(self.isin)
 
-    def save_candles(self, interval: Interval, dir_path: str) -> None:
-        path = os.path.join(dir_path, self.ticker + '_' + interval.value + '.h5')
+    def save_candles(self, interval: Interval) -> None:
+        path = os.path.join(Paths.candles_dir, self.ticker + '_' + interval.value + '.h5')
         df = self.timeframes[interval].df
         df['Time'] = pd.to_datetime(df['Time'], errors='raise', utc=True)
         df[['Open', 'High', 'Low', 'Close', 'Volume']] = df[['Open', 'High', 'Low', 'Close', 'Volume']].apply(
             pd.to_numeric, errors='raise')
         df.to_hdf(path, key='df', mode='w')
 
-    def read_candles(self, interval: Interval, dir_path: str) -> None:
-        path = os.path.join(dir_path, self.ticker + '_' + interval.value + '.h5')
+    def read_candles(self, interval: Interval) -> None:
+        path = os.path.join(Paths.candles_dir, self.ticker + '_' + interval.value + '.h5')
         if not os.path.isfile(path):
             return
         self.timeframes[interval].df = pd.read_hdf(path)
 
-    def fill_df(self, client, interval: Interval, dir_path: str):
+    def fill_df(self, client, interval: Interval):
         tf = self.timeframes[interval]
-        path = os.path.join(dir_path, self.ticker + '_' + interval.value + '.h5')
 
-        if not os.path.isfile(path):
+        if not tf.df.size:
             tf.df = fill_df(client, interval, self.ticker, self.figi)
         else:
-            tf.df = pd.read_hdf(path, key='df')
-            if (datetime.now(timezone.utc) - tf.df['Time'].iat[-1]) > PERIODS[interval]:
-                tf.df = pd.concat([tf.df, append_df(client, interval, tf.df['Time'].iat[-1], self.ticker, self.figi)],
+            if (datetime.now(timezone.utc) - tf.df['Time'].iat[-1]) > DELTAS[interval]:
+                tf.df = pd.concat([tf.df, append_df(client, interval, tf.df['Time'].iat[-1], self.figi)],
                                  ignore_index=True)
                 tf.df = tf.df.drop_duplicates(subset=['Time'])
 
@@ -103,20 +102,19 @@ class Stock(Instrument):
         tf.df = tf.df.ta.ticker(self.ticker, period='1mo', interval=YahooIntervals[interval])
 
 
-def append_df(client: ti.SyncClient, interval: Interval, last_time: datetime, ticker: str, figi: str) -> pd.DataFrame:
-    now = datetime.utcnow()
-    oldest_time_float = now.timestamp()
-    last_time_float = last_time.timestamp()
+def append_df(client: ti.SyncClient, interval: Interval, last_time: datetime, figi: str) -> pd.DataFrame:
+    now = datetime.now(timezone.utc)
+    oldest_time = datetime.now(timezone.utc)
     candle_list = []
     break_loop = 0
-    while oldest_time_float > last_time_float or break_loop > 3:
+    while oldest_time > last_time and break_loop < 4:
         try:
             candles = client.get_market_candles(figi,
                                                 from_=now - PERIODS[interval],
                                                 to=now,
                                                 interval=ti.CandleResolution(interval)).payload.candles
             if len(candles) > 1:
-                oldest_time_float = candles[0].time.timestamp()
+                oldest_time = candles[0].time
             else:
                 break_loop += 1
             now -= PERIODS[interval]
@@ -125,14 +123,13 @@ def append_df(client: ti.SyncClient, interval: Interval, last_time: datetime, ti
                             for c in candles]
 
         except ti.exceptions.TooManyRequestsError:
-            print(f"Wating for 60 seconds -> {ticker} -> {interval} -> {datetime.now().strftime('%H:%M:%S')}")
+            print(f"Wating for 60 seconds -> {figi} -> {interval} -> {datetime.now().strftime('%H:%M:%S')}")
             time.sleep(60)
 
     df = pd.DataFrame(
         candle_list,
         columns=['Time', 'Open', 'High', 'Low', 'Close', 'Volume']
     ).sort_values(by='Time', ascending=True, ignore_index=True)
-    df[['Open', 'High', 'Low', 'Close', 'Volume']] = df[['Open', 'High', 'Low', 'Close', 'Volume']].apply(pd.to_numeric, errors='coerce')
     return df.loc[df['Time'] > last_time]
 
 
@@ -140,8 +137,8 @@ def fill_df(client, interval, ticker, figi) -> pd.DataFrame:
     now = datetime.utcnow()
     list_size = 250
     candle_list = []
-    last_date = datetime.utcnow().timestamp()
-    min_date = (datetime.utcnow() - timedelta(minutes=10)).timestamp()
+    last_date = datetime.now(timezone.utc)
+    min_date = datetime.now(timezone.utc) - timedelta(minutes=3)
     break_loop = 0
 
     while break_loop < 4:
@@ -158,7 +155,7 @@ def fill_df(client, interval, ticker, figi) -> pd.DataFrame:
                                                 to=now,
                                                 interval=interval).payload.candles
             if len(candles) > 1:
-                min_date = candles[0].time.timestamp()
+                min_date = candles[0].time
             else:
                 break_loop += 1
             now -= PERIODS[interval]
