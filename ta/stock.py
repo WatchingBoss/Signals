@@ -1,9 +1,9 @@
 from datetime import datetime, timedelta, timezone
 import time, os
-from config import Paths
+from config import Paths, CANDLE_COLUMNS
 from ta import scraper
-from ta.schemas import Interval, YahooIntervals
-from ta.variables import DELTAS, PERIODS
+from schemas import Interval
+from ta.variables import DELTAS, PERIODS, YahooIntervals
 import tinvest as ti
 import pandas as pd
 import pandas_ta as ta
@@ -59,8 +59,7 @@ class Stock(Instrument):
         path = os.path.join(Paths.candles_dir, self.ticker + '_' + interval.value + '.h5')
         df = self.timeframes[interval].df
         df['Time'] = pd.to_datetime(df['Time'], errors='raise', utc=True)
-        df[['Open', 'High', 'Low', 'Close', 'Volume']] = df[['Open', 'High', 'Low', 'Close', 'Volume']].apply(
-            pd.to_numeric, errors='raise')
+        df[CANDLE_COLUMNS[1:]] = df[CANDLE_COLUMNS[1:]].apply(pd.to_numeric, errors='raise')
         df.to_hdf(path, key='df', mode='w')
 
     def read_candles(self, interval: Interval) -> None:

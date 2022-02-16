@@ -1,5 +1,5 @@
-from datetime import timedelta, datetime
-from ta.schemas import Interval
+from datetime import timedelta
+from schemas import Interval
 
 
 DELTAS = {
@@ -13,6 +13,7 @@ DELTAS = {
     Interval.month: timedelta(days=30)
 }
 
+
 PERIODS = {
     Interval.min1: timedelta(days=1),
     Interval.min5: timedelta(days=1),
@@ -22,4 +23,16 @@ PERIODS = {
     Interval.day: timedelta(days=365),
     Interval.week: timedelta(days=365*1.8),
     Interval.month: timedelta(days=365*10)
+}
+
+
+YahooIntervals = {
+    Interval.min1: '1m',
+    Interval.min5: '5m',
+    Interval.min15: '15m',
+    Interval.min30: '30m',
+    Interval.hour: '1h',
+    Interval.day: '1d',
+    Interval.week: '1wk',
+    Interval.month: '1mo'
 }

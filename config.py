@@ -1,7 +1,5 @@
-from enum import Enum
-import tinvest as ti
 import os
-# from ta.schemas import Interval
+from schemas import Interval
 
 basedir = os.path.abspath(os.path.dirname(__file__))
 
@@ -20,17 +18,6 @@ class Config(object):
     SUM_DIR = Paths.sum_dir
 
 
-class Interval(str, Enum):
-    min1 = ti.CandleResolution.min1.value
-    min5 = ti.CandleResolution.min5.value
-    min15 = ti.CandleResolution.min15.value
-    min30 = ti.CandleResolution.min30.value
-    hour = ti.CandleResolution.hour.value
-    day = ti.CandleResolution.day.value
-    week = ti.CandleResolution.week.value
-    month = ti.CandleResolution.month.value
-
-
 intervals = [
     Interval.min1,
     Interval.min5,
@@ -40,4 +27,21 @@ intervals = [
     Interval.day,
     Interval.week,
     Interval.month,
+]
+
+
+SUM_COLUMNS = [
+    'Ticker', 'Time',
+    'Open', 'High', 'Low', 'Close', 'Volume',
+    'EMA_10', 'EMA_20', 'EMA_50', 'EMA_200',
+    'RSI_14',
+    'MACDh_12_26_9'
+]
+
+CANDLE_COLUMNS = [
+    'Time',
+    'Open', 'High', 'Low', 'Close', 'Volume',
+    'EMA_10', 'EMA_20', 'EMA_50', 'EMA_200',
+    'RSI_14',
+    'MACD_12_26_9', 'MACDh_12_26_9', 'MACDs_12_26_9'
 ]

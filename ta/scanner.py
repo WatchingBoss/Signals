@@ -1,6 +1,4 @@
 import os, json
-from datetime import datetime, timedelta
-import itertools
 from concurrent.futures import ThreadPoolExecutor
 import asyncio
 
@@ -9,8 +7,9 @@ import pandas as pd
 
 from ta import myhelper as mh
 from ta.stock import Stock
-from ta.schemas import Interval, SUM_COLUMNS
+from schemas import Interval
 from ta.variables import DELTAS
+from config import SUM_COLUMNS
 
 
 # TODO: Streaming for 1min-day timeframes
@@ -89,6 +88,7 @@ class Scanner:
 
         self.fill_dfs()
         self.fill_indicators()
+        self.save_candles()
         self.summeries = [self.sum_df(interval) for interval in intervals]
 
     def fill_dfs(self) -> None:
@@ -99,16 +99,13 @@ class Scanner:
             for interval in self.intervals:
                 s.fill_df(self.client, interval)
             print(f"Fill_df done for {s.ticker}")
+
+    def save_candles(self):
         with ThreadPoolExecutor(max_workers=8) as ex:
             for interval in self.intervals:
                 [ex.submit(s.save_candles, interval) for s in self.usd_stocks.values()]
 
     def fill_indicators(self) -> None:
-        with ThreadPoolExecutor(max_workers=6) as executor:
-            for interval in self.intervals:
-                [executor.submit(s.fill_indicators, interval) for s in self.usd_stocks.values()]
-
-    async def update_indicators(self) -> None:
         with ThreadPoolExecutor(max_workers=6) as executor:
             for interval in self.intervals:
                 [executor.submit(s.fill_indicators, interval) for s in self.usd_stocks.values()]
