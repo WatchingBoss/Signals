@@ -2,7 +2,7 @@
 {% block content%}
 
     <div class="text-block">
-        <p>This is indicators page</p>
+        <p>This is {{ ticker }} page</p>
     </div>
     <div class="form">
         <form method="get" action="">
@@ -22,14 +22,13 @@
             <tbody>
             {% for index, row in df.iterrows() %}
                 <tr>
-                <td><a href="{{ url_for('stock', ticker=row['Ticker'], interval=interval) }}">{{ row['Ticker'] }}</a></td>
                 <td>{{ row['Time']|time_format }}</td>
-                {% for cell in row[2:] %}
+                 {% for cell in row[1:] %}
                     {% if cell is integer %}
                         <td>{{ cell }}</td>
                     {% elif cell is float %}
                         <td>{{ cell|round(5) }}</td>
-                    {% endif %}
+                     {% endif %}
                 {% endfor %}
                 </tr>
             {% endfor %}

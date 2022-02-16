@@ -25,9 +25,19 @@ def overview():
 @app.route('/indicators/<interval>', methods=['GET'])
 def indicators(interval):
     form = ChooseInterval(interval=interval)
-    df = pd.read_pickle(os.path.join('data', interval + '.pkl'))
+    df = pd.read_hdf(os.path.join(app.config['SUM_DIR'], interval + '.h5'), key='df')
     return render_template('indicators.html', title='Indicators',
                            df=df, interval=interval, form=form
+                           )
+
+
+@app.route('/stock/<ticker>/<interval>', methods=['GET'])
+def stock(ticker, interval):
+    form = ChooseInterval(interval=interval)
+    df = pd.read_hdf(os.path.join(app.config['CANDLES_DIR'], ticker + '_' + interval + '.h5'), key='df')
+    df = df.sort_values(by='Time', ascending=False, ignore_index=True).iloc[:50]
+    return render_template('stock.html', title='Stock' + ticker,
+                           df=df, interval=interval, form=form, ticker=ticker
                            )
 
 
@@ -36,8 +46,8 @@ def before_request():
     g.locale = str(get_locale())
 
 
-@app.template_filter('check_value')
-def check_value(value) -> str:
+@app.template_filter('time_format')
+def time_format(value) -> str:
     if isinstance(value, datetime):
         date = value + timedelta(hours=3)
         return date.strftime("%y-%m-%d %H:%M:%S")
