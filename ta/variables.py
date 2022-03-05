@@ -1,5 +1,5 @@
 from datetime import timedelta
-from schemas import Interval
+from config import Interval
 
 
 DELTAS = {
@@ -36,3 +36,26 @@ YahooIntervals = {
     Interval.week: '1wk',
     Interval.month: '1mo'
 }
+
+
+SUM_COLUMNS = [
+    'Ticker', 'Time',
+    'Open', 'High', 'Low', 'Close', 'Volume',
+    'EMA_10', 'EMA_20', 'EMA_50', 'EMA_200',
+    'RSI_14',
+    'MACDh_12_26_9'
+]
+
+CANDLE_COLUMNS = [
+    'Time',
+    'Open', 'High', 'Low', 'Close', 'Volume',
+    'EMA_10', 'EMA_20', 'EMA_50', 'EMA_200',
+    'RSI_14',
+    'MACD_12_26_9', 'MACDh_12_26_9', 'MACDs_12_26_9'
+]
+
+OVERVIEW_COLUMNS = [
+    'Ticker', 'Name', 'Sector', 'Industry', 'Country',
+    'Market Cap', 'Divident', 'Divident %', 'Employees',
+    'Recomendation', 'P/E', 'P/S', 'Debt to Eq', 'Short Float %'
+]

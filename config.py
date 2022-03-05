@@ -1,5 +1,7 @@
 import os
-from schemas import Interval
+from enum import Enum
+import tinvest as ti
+
 
 basedir = os.path.abspath(os.path.dirname(__file__))
 
@@ -7,6 +9,7 @@ class Paths(object):
     data_dir = os.path.join(basedir, 'data')
     candles_dir = os.path.join(data_dir, 'candles')
     sum_dir = os.path.join(data_dir, 'summeries')
+    overview = os.path.join(data_dir, 'overview')
 
 
 class Config(object):
@@ -16,6 +19,17 @@ class Config(object):
     DATA_DIR = Paths.data_dir
     CANDLES_DIR = Paths.candles_dir
     SUM_DIR = Paths.sum_dir
+
+
+class Interval(str, Enum):
+    min1 = ti.CandleResolution.min1.value
+    min5 = ti.CandleResolution.min5.value
+    min15 = ti.CandleResolution.min15.value
+    min30 = ti.CandleResolution.min30.value
+    hour = ti.CandleResolution.hour.value
+    day = ti.CandleResolution.day.value
+    week = ti.CandleResolution.week.value
+    month = ti.CandleResolution.month.value
 
 
 intervals = [
@@ -30,18 +44,3 @@ intervals = [
 ]
 
 
-SUM_COLUMNS = [
-    'Ticker', 'Time',
-    'Open', 'High', 'Low', 'Close', 'Volume',
-    'EMA_10', 'EMA_20', 'EMA_50', 'EMA_200',
-    'RSI_14',
-    'MACDh_12_26_9'
-]
-
-CANDLE_COLUMNS = [
-    'Time',
-    'Open', 'High', 'Low', 'Close', 'Volume',
-    'EMA_10', 'EMA_20', 'EMA_50', 'EMA_200',
-    'RSI_14',
-    'MACD_12_26_9', 'MACDh_12_26_9', 'MACDs_12_26_9'
-]

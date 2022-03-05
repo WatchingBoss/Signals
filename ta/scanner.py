@@ -1,15 +1,20 @@
+import concurrent.futures
 import os, json
 from concurrent.futures import ThreadPoolExecutor
 import asyncio
+import aiohttp
+from datetime import timedelta
+from time import time
 
 import tinvest as ti
 import pandas as pd
+import cloudscraper
 
 from ta import myhelper as mh
 from ta.stock import Stock
-from schemas import Interval
-from ta.variables import DELTAS
-from config import SUM_COLUMNS
+from ta.variables import DELTAS, SUM_COLUMNS, OVERVIEW_COLUMNS
+from config import Interval
+import ta.scraper as scr
 
 
 # TODO: Streaming for 1min-day timeframes
@@ -33,6 +38,147 @@ async def handle_candle(payload: ti.CandleStreaming, stock: Stock):
         pd.concat([tf.df, pd.DataFrame(pd.Series(dtype=int))], axis=0)
         last_row += 1
     update_raw(tf.df, last_row, payload)
+
+
+class Scanner:
+    def __init__(self, intervals):
+        self.intervals = intervals
+        self.client = mh.get_client()
+        self.usd_stocks = mh.get_market_data(self.client, 'USD', developing=True)
+        self.ticker_figi = {s.ticker: s.figi for s in self.usd_stocks.values()}
+
+        self.fill_dfs()
+        self.fill_indicators()
+        self.save_candles()
+        self.summeries = [self.sum_df(interval) for interval in intervals]
+
+    def fill_dfs(self) -> None:
+        with ThreadPoolExecutor(max_workers=8) as ex:
+            for interval in self.intervals:
+                [ex.submit(s.read_candles, interval) for s in self.usd_stocks.values()]
+        for s in self.usd_stocks.values():
+            for interval in self.intervals:
+                s.fill_df(self.client, interval)
+            print(f"Fill_df done for {s.ticker}")
+
+    def save_candles(self):
+        with ThreadPoolExecutor(max_workers=8) as ex:
+            for interval in self.intervals:
+                [ex.submit(s.save_candles, interval) for s in self.usd_stocks.values()]
+
+    def fill_indicators(self) -> None:
+        with ThreadPoolExecutor(max_workers=6) as executor:
+            for interval in self.intervals:
+                [executor.submit(s.fill_indicators, interval) for s in self.usd_stocks.values()]
+
+    def sum_df(self, interval: ti.CandleResolution) -> pd.DataFrame:
+        summery = []
+        for s in self.usd_stocks.values():
+            last_values = []
+            for column in SUM_COLUMNS[1:]:
+                try:
+                    last_values.append(s.timeframes[interval].df[column].iat[-1])
+                except KeyError:
+                    last_values.append(None)
+            summery.append([s.ticker] + last_values)
+
+        print(f"{interval} Done")
+        return pd.DataFrame(summery, columns=SUM_COLUMNS).sort_values(
+            by='Ticker', ascending=True, ignore_index=True
+        )
+
+    def fill_overview(self):
+        scraper = cloudscraper.create_scraper(
+            browser={
+                'browser': 'chrome',
+                'platform': 'windows',
+                'mobile': False
+            }
+        )
+        urls = scr.finviz_urls(list(self.usd_stocks.values()))
+        htmls = list()
+
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            futures = {executor.submit(scr.downlaod_page_cloudflare, url, scraper) for url in urls}
+            for future in concurrent.futures.as_completed(futures):
+                htmls.append(future.result())
+
+            futures = {executor.submit(scr.finviz, html) for html in htmls}
+            for future in concurrent.futures.as_completed(futures):
+                d = future.result()
+                self.usd_stocks[self.ticker_figi[d['ticker']]].overview = d
+
+    async def save_overview(self, path: str):
+        while True:
+            if timedelta(days=1).total_seconds() > (time() - os.path.getatime(path)):
+                await asyncio.sleep(timedelta(hours=6).total_seconds())
+                continue
+            overviews = list()
+            for s in self.usd_stocks.values():
+                overviews.append(list(s.overview.values()))
+            df = pd.DataFrame(overviews, columns=OVERVIEW_COLUMNS).sort_values(
+                by='Ticker', ascending=True, ignore_index=True
+            )
+            df.to_hdf(path, key='df')
+
+    async def streaming(self) -> None:
+        async with ti.Streaming(mh.get_token()) as streaming:
+            for interval in self.intervals:
+                await asyncio.gather(*(streaming.candle.subscribe(s.figi, interval)
+                                       for s in self.usd_stocks.values()))
+            async for event in streaming:
+                await handle_candle(event.payload, self.usd_stocks[event.payload.figi])
+
+    def print_df(self) -> None:
+        for df in self.summeries:
+            print(df.to_string())
+
+    def save_df(self, paths: list) -> None:
+        for i in range(len(self.intervals)):
+            df = self.summeries[i]
+            df['Ticker'] = df['Ticker'].astype(str)
+            df['Time'] = pd.to_datetime(df['Time'], errors='raise', utc=True)
+            df[SUM_COLUMNS[2:]] = df[SUM_COLUMNS[2:]].apply(pd.to_numeric, errors='raise')
+            self.summeries[i].to_hdf(paths[i], key='df', mode='w')
+
+    async def resave_df(self, paths: list) -> None:
+        while True:
+            print('Resave function')
+            await asyncio.sleep(60)
+            self.fill_indicators()
+            self.summeries = [self.sum_df(interval) for interval in self.intervals]
+            self.save_df(paths)
+            self.print_df()
+
+
+def test_overview():
+    client = mh.get_client()
+    stocks = list(mh.get_market_data(client, 'USD', developing=True).values())
+    urls = scr.finviz_urls(stocks)
+
+    scraper = cloudscraper.create_scraper(
+        browser={
+            'browser': 'chrome',
+            'platform': 'windows',
+            'mobile': False
+        }
+    )
+
+    htmls = []
+    finviz_data = []
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        futures = {executor.submit(scr.downlaod_page_cloudflare, url, scraper) for url in urls}
+        for future in concurrent.futures.as_completed(futures):
+            htmls.append(future.result())
+
+        futures = {executor.submit(scr.finviz, html) for html in htmls}
+        for future in concurrent.futures.as_completed(futures):
+            finviz_data.append(future.result())
+
+    for d in finviz_data:
+        for k, v in d.items():
+            print(f"{k}: {v}")
+        print()
 
 
 def test():
@@ -78,105 +224,3 @@ def test():
 
         df = pd.DataFrame(summery, columns=SUM_COLUMNS)
         print(df.to_string())
-
-
-class Scanner:
-    def __init__(self, intervals):
-        self.intervals = intervals
-        self.client = mh.get_client()
-        self.usd_stocks = mh.get_market_data(self.client, 'USD', developing=True)
-
-        self.fill_dfs()
-        self.fill_indicators()
-        self.save_candles()
-        self.summeries = [self.sum_df(interval) for interval in intervals]
-
-    def fill_dfs(self) -> None:
-        with ThreadPoolExecutor(max_workers=8) as ex:
-            for interval in self.intervals:
-                [ex.submit(s.read_candles, interval) for s in self.usd_stocks.values()]
-        for s in self.usd_stocks.values():
-            for interval in self.intervals:
-                s.fill_df(self.client, interval)
-            print(f"Fill_df done for {s.ticker}")
-
-    def save_candles(self):
-        with ThreadPoolExecutor(max_workers=8) as ex:
-            for interval in self.intervals:
-                [ex.submit(s.save_candles, interval) for s in self.usd_stocks.values()]
-
-    def fill_indicators(self) -> None:
-        with ThreadPoolExecutor(max_workers=6) as executor:
-            for interval in self.intervals:
-                [executor.submit(s.fill_indicators, interval) for s in self.usd_stocks.values()]
-
-    def sum_df(self, interval: ti.CandleResolution) -> pd.DataFrame:
-        summery = []
-        for s in self.usd_stocks.values():
-            last_values = []
-            for column in SUM_COLUMNS[1:]:
-                try:
-                    last_values.append(s.timeframes[interval].df[column].iat[-1])
-                except KeyError:
-                    last_values.append(None)
-            summery.append([s.ticker] + last_values)
-
-        print(f"{interval} Done")
-        return pd.DataFrame(summery, columns=SUM_COLUMNS).sort_values(
-            by='Ticker', ascending=True, ignore_index=True
-        )
-
-    async def streaming(self) -> None:
-        async with ti.Streaming(mh.get_token()) as streaming:
-            for interval in self.intervals:
-                await asyncio.gather(*(streaming.candle.subscribe(s.figi, interval)
-                                       for s in self.usd_stocks.values()))
-            async for event in streaming:
-                await handle_candle(event.payload, self.usd_stocks[event.payload.figi])
-
-    def print_df(self) -> None:
-        for df in self.summeries:
-            print(df.to_string())
-
-    def save_df(self, paths: list) -> None:
-        for i in range(len(self.intervals)):
-            df = self.summeries[i]
-            df['Ticker'] = df['Ticker'].astype(str)
-            df['Time'] = pd.to_datetime(df['Time'], errors='raise', utc=True)
-            df[SUM_COLUMNS[2:]] = df[SUM_COLUMNS[2:]].apply(pd.to_numeric, errors='raise')
-            self.summeries[i].to_hdf(paths[i], key='df', mode='w')
-
-    async def resave_df(self, paths: list) -> None:
-        while True:
-            print('Resave function')
-            await asyncio.sleep(60)
-            self.fill_indicators()
-            self.summeries = [self.sum_df(interval) for interval in self.intervals]
-            self.save_df(paths)
-            self.print_df()
-
-
-def overview():
-    with open(os.path.join(os.path.expanduser('~'), 'no_commit', 'info.json')) as f:
-        data = json.load(f)
-    client = ti.SyncClient(data['token_tinkoff_real'])
-
-    path_data_dir = os.path.join(os.curdir, 'data')
-
-    stocks = {}
-
-    columns = ['Name', 'Price', 'Sector', 'Industry', 'P/E', 'P/S',
-               'Debt/Equity', 'ATR', 'Average Volume', 'Short Float']
-    index = []
-    rows = []
-    for stock in stocks.values():
-        index.append(stock.ticker)
-        rows.append([stock.data['name'], stock.data['price'], stock.data['sector'],
-                     stock.data['industry'], stock.data['p_e'], stock.data['p_s'], stock.data['debt_eq'],
-                     stock.data['atr'], stock.data['avg_v'], stock.data['short_float']])
-
-    df = pd.DataFrame(rows, index=index, columns=columns)
-    df.sort_index(inplace=True)
-
-    pkl_file = os.path.join(path_data_dir, 'overview.pkl')
-    df.to_pickle(pkl_file)

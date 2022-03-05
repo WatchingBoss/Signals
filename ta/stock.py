@@ -1,9 +1,8 @@
 from datetime import datetime, timedelta, timezone
 import time, os
-from config import Paths, CANDLE_COLUMNS
+from config import Paths, Interval
 from ta import scraper
-from schemas import Interval
-from ta.variables import DELTAS, PERIODS, YahooIntervals
+from ta.variables import DELTAS, PERIODS, YahooIntervals, CANDLE_COLUMNS
 import tinvest as ti
 import pandas as pd
 import pandas_ta as ta
@@ -37,6 +36,7 @@ class Stock(Instrument):
     def __init__(self, ticker: str, figi: str, isin: str, currency: str):
         super().__init__(ticker, figi, isin, currency)
         self.shortable = False
+        self.overview = dict()
 
         self.timeframes = {
             Interval.min1: Timeframe(Interval.min1),

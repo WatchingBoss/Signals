@@ -17,9 +17,9 @@ def index():
 
 @app.route('/overview')
 def overview():
-    df = pd.read_pickle(os.path.join('data', 'overview.pkl'))
+    df = pd.read_hdf(os.path.join('data', 'overview', 'summery' + '.h5'), key='df')
     return render_template('overview.html', title='Overview',
-                           table=df.to_html(classes='table table-striped table-bordered table-sm'))
+                           df=df)
 
 
 @app.route('/indicators/<interval>', methods=['GET'])
