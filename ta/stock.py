@@ -55,18 +55,22 @@ class Stock(Instrument):
     def check_if_able_for_short(self):
         self.shortable = scraper.check_tinkoff_short_table(self.isin)
 
-    def save_candles(self, interval: Interval) -> None:
-        path = os.path.join(Paths.candles_dir, self.ticker + '_' + interval.value + '.h5')
-        df = self.timeframes[interval].df
-        df['Time'] = pd.to_datetime(df['Time'], errors='raise', utc=True)
-        df[CANDLE_COLUMNS[1:]] = df[CANDLE_COLUMNS[1:]].apply(pd.to_numeric, errors='raise')
-        df.to_hdf(path, key='df', mode='w')
+    def save_candles(self, intervals: list) -> None:
+        path = os.path.join(Paths.candles_dir, self.ticker + '.h5')
+        with pd.HDFStore(path, mode='w') as hdf:
+            for interval in intervals:
+                df = self.timeframes[interval].df
+                # df['Time'] = pd.to_datetime(df['Time'], errors='raise', utc=True)
+                # df[CANDLE_COLUMNS[1:]] = df[CANDLE_COLUMNS[1:]].apply(pd.to_numeric, errors='raise')
+                hdf.put(key=f"{self.ticker}_{interval.value}", value=df, format='table', data_columns=True)
 
-    def read_candles(self, interval: Interval) -> None:
-        path = os.path.join(Paths.candles_dir, self.ticker + '_' + interval.value + '.h5')
+    def read_candles(self, intervals: list) -> None:
+        path = os.path.join(Paths.candles_dir, self.ticker + '.h5')
         if not os.path.isfile(path):
             return
-        self.timeframes[interval].df = pd.read_hdf(path)
+        with pd.HDFStore(path, mode='r') as hdf:
+            for interval in intervals:
+                self.timeframes[interval].df = hdf.get(key=f"{self.ticker}_{interval.value}")
 
     def fill_df(self, client, interval: Interval):
         tf = self.timeframes[interval]
@@ -106,7 +110,7 @@ def append_df(client: ti.SyncClient, interval: Interval, last_time: datetime, fi
     oldest_time = datetime.now(timezone.utc)
     candle_list = []
     break_loop = 0
-    while oldest_time > last_time and break_loop < 4:
+    while oldest_time > last_time and break_loop < 100:
         try:
             candles = client.get_market_candles(figi,
                                                 from_=now - PERIODS[interval],
@@ -140,8 +144,9 @@ def fill_df(client, interval, ticker, figi) -> pd.DataFrame:
     min_date = datetime.now(timezone.utc) - timedelta(minutes=3)
     break_loop = 0
 
-    while break_loop < 4:
+    while break_loop < 100:
         if len(candle_list) >= list_size:
+            print(f"Break on {len(candle_list)}")
             break
         if min_date < last_date:
             last_date = min_date

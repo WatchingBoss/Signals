@@ -3,7 +3,7 @@ import os, json
 from concurrent.futures import ThreadPoolExecutor
 import asyncio
 import aiohttp
-from datetime import timedelta
+from datetime import timedelta, datetime, timezone
 from time import time
 
 import tinvest as ti
@@ -42,29 +42,35 @@ async def handle_candle(payload: ti.CandleStreaming, stock: Stock):
 
 class Scanner:
     def __init__(self, intervals):
+        start = time()
         self.intervals = intervals
         self.client = mh.get_client()
         self.usd_stocks = mh.get_market_data(self.client, 'USD', developing=True)
         self.ticker_figi = {s.ticker: s.figi for s in self.usd_stocks.values()}
+        print(f"Before filling gets {(time() - start):.2f} sec")
 
         self.fill_dfs()
+        start = time()
         self.fill_indicators()
-        self.save_candles()
+        print(f"Indicators finished in {(time() - start):.2f} sec")
         self.summeries = [self.sum_df(interval) for interval in intervals]
 
     def fill_dfs(self) -> None:
+        start_read = time()
         with ThreadPoolExecutor(max_workers=8) as ex:
-            for interval in self.intervals:
-                [ex.submit(s.read_candles, interval) for s in self.usd_stocks.values()]
+            [ex.submit(s.read_candles, self.intervals) for s in self.usd_stocks.values()]
+        print(f"Reading done in {(time() - start_read):.2f} sec")
         for s in self.usd_stocks.values():
+            start = time()
             for interval in self.intervals:
                 s.fill_df(self.client, interval)
-            print(f"Fill_df done for {s.ticker}")
+            print(f"Fill_df done for {s.ticker} in {(time() - start):.2f} sec")
 
     def save_candles(self):
+        start_save = time()
         with ThreadPoolExecutor(max_workers=8) as ex:
-            for interval in self.intervals:
-                [ex.submit(s.save_candles, interval) for s in self.usd_stocks.values()]
+            [ex.submit(s.save_candles, self.intervals) for s in self.usd_stocks.values()]
+        print(f"Saving done in {(time() - start_save):.2f} sec")
 
     def fill_indicators(self) -> None:
         with ThreadPoolExecutor(max_workers=6) as executor:
@@ -182,6 +188,7 @@ def test_overview():
 
 
 def test():
+
     intervals = [
         Interval.min1,
         Interval.min5,
@@ -200,27 +207,51 @@ def test():
     # s = Stock(ticker=p.ticker, figi=p.figi, isin=p.isin, currency=p.currency)
 
     with ThreadPoolExecutor(max_workers=8) as ex:
-        for interval in intervals:
-            [ex.submit(s.read_candles, interval) for s in stocks.values()]
+        [ex.submit(s.read_candles, intervals) for s in stocks.values()]
+
+    # with ThreadPoolExecutor(max_workers=8) as ex:
+    #     [ex.submit(s.fill_df, client, interval) for s in stocks.values()]
+    #
+    # with ThreadPoolExecutor(max_workers=8) as ex:
+    #     [ex.submit(s.fill_indicators, interval) for s in stocks.values()]
+
     for s in stocks.values():
         for interval in intervals:
-            s.fill_df(client, interval)
-            s.save_candles(interval)
-    with ThreadPoolExecutor(max_workers=8) as ex:
-        for interval in intervals:
-            [ex.submit(s.fill_indicators, interval) for s in stocks.values()]
+            print(s.timeframes[interval].df.tail(3))
 
-    for interval in intervals:
-        summery = []
-        for s in stocks.values():
-            last_values = []
-            for column in SUM_COLUMNS[1:]:
-                try:
-                    last_values.append(s.timeframes[interval].df.iloc[-1][column])
-                except KeyError:
-                    print(f"Ticker: {s.ticker}\tColumn: {column}\tLenght of Close: {s.timeframes[interval].df['Close'].count()}")
-                    last_values.append(None)
-            summery.append([s.ticker] + last_values)
+    # summery = []
+    # for s in stocks.values():
+    #     last_values = []
+    #     for column in SUM_COLUMNS[1:]:
+    #         try:
+    #             last_values.append(s.timeframes[interval].df.iloc[-1][column])
+    #         except KeyError:
+    #             print(f"Ticker: {s.ticker}\tColumn: {column}\tLenght of Close: {s.timeframes[interval].df['Close'].count()}")
+    #             last_values.append(None)
+    #     summery.append([s.ticker] + last_values)
+    #
+    # df = pd.DataFrame(summery, columns=SUM_COLUMNS)
+    # print(df.to_string())
 
-        df = pd.DataFrame(summery, columns=SUM_COLUMNS)
-        print(df.to_string())
+
+def test_tin():
+    interval = Interval.min1
+    client = mh.get_client()
+    stocks = mh.get_market_data(client, 'USD', developing=True)
+
+    from ta.variables import PERIODS
+    s = list(stocks.values())[0]
+    now = datetime.now(timezone.utc)
+    candles = client.get_market_candles(s.figi,
+                                        from_=now - PERIODS[interval],
+                                        to=now,
+                                        interval=ti.CandleResolution(interval)).payload.candles
+
+    candle_list = [[c.time, float(c.o), float(c.h), float(c.l), float(c.c), int(c.v)] for c in candles]
+
+    df = pd.DataFrame(
+        candle_list,
+        columns=['Time', 'Open', 'High', 'Low', 'Close', 'Volume']
+    ).sort_values(by='Time', ascending=True, ignore_index=True)
+
+    print(df.to_string())
