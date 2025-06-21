@@ -1,0 +1,14 @@
+flask
+flask_babel
+pandas
+tinvest
+cloudscraper
+beautifulsoup4
+requests
+fake_useragent
+aiohttp
+lxml
+tables
+pandas_ta
+setuptools
+numpy<2.0 # Pin numpy due to pandas_ta incompatibility with np.NaN in numpy 2.x
