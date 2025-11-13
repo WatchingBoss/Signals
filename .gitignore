@@ -7,5 +7,4 @@
 
 data/
 data/work_stocks.txt
-*.lock
 uv.lock
