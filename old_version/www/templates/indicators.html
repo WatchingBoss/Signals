@@ -1,40 +1,40 @@
 {% extends "base.html" %}
 {% block content%}
 
-    <div class="text-block">
-        <p>This is indicators page</p>
-    </div>
-    <div class="form">
-        <form method="get" action="">
-            {{ form.hidden_tag() }}
-            <div class="mb-2">
+<div class="text-block">
+    <p>This is indicators page</p>
+</div>
+<div class="form">
+    <form method="get" action="">
+        {{ form.hidden_tag() }}
+        <div class="mb-2">
             {{ form.interval.label }} {{ form.interval() }}
-            </div>
-        </form>
-    </div>
-    <div class="table-responsive" style="font-size: 12px">
-        <table class="table table-light table-bordered table-hover table-sm">
-            <thead>
-            {% for cell in df.columns %}
-                <th>{{ cell }}</th>
+        </div>
+    </form>
+</div>
+<div class="table-responsive" style="font-size: 12px">
+    <table class="table table-light table-bordered table-hover table-sm">
+        <thead>
+        {% for cell in df.columns %}
+        <th>{{ cell }}</th>
+        {% endfor %}
+        </thead>
+        <tbody>
+        {% for index, row in df.iterrows() %}
+        <tr>
+            <td><a href="{{ url_for('stock', ticker=row['Ticker'], interval=interval) }}">{{ row['Ticker'] }}</a></td>
+            <td>{{ row['Time']|time_format }}</td>
+            {% for cell in row[2:] %}
+            {% if cell is integer %}
+            <td>{{ cell }}</td>
+            {% elif cell is float %}
+            <td>{{ cell|round(5) }}</td>
+            {% endif %}
             {% endfor %}
-            </thead>
-            <tbody>
-            {% for index, row in df.iterrows() %}
-                <tr>
-                <td><a href="{{ url_for('stock', ticker=row['Ticker'], interval=interval) }}">{{ row['Ticker'] }}</a></td>
-                <td>{{ row['Time']|time_format }}</td>
-                {% for cell in row[2:] %}
-                    {% if cell is integer %}
-                        <td>{{ cell }}</td>
-                    {% elif cell is float %}
-                        <td>{{ cell|round(5) }}</td>
-                    {% endif %}
-                {% endfor %}
-                </tr>
-            {% endfor %}
-            </tbody>
-        </table>
-    </div>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
 
 {% endblock %}

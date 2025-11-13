@@ -1,35 +1,35 @@
 {% extends "base.html" %}
 {% block content %}
 
-    <div class="text-block">
-        <p>This is overview page</p>
-    </div>
+<div class="text-block">
+    <p>This is overview page</p>
+</div>
 
-    <div class="table-responsive" style="font-size: 12px">
-        <table class="table table-light table-bordered table-hover table-sm">
-            <thead>
-            {% for cell in df.columns %}
-                <th>{{ cell }}</th>
+<div class="table-responsive" style="font-size: 12px">
+    <table class="table table-light table-bordered table-hover table-sm">
+        <thead>
+        {% for cell in df.columns %}
+        <th>{{ cell }}</th>
+        {% endfor %}
+        </thead>
+        <tbody>
+        {% for index, row in df.iterrows() %}
+        <tr>
+            <td><a href="{{ url_for('stock', ticker=row['Ticker'], interval=interval) }}">{{ row['Ticker'] }}</a></td>
+            {% for cell in row[1:] %}
+            {% if cell is integer %}
+            <td>{{ cell }}</td>
+            {% elif cell is float %}
+            <td>{{ cell|round(5) }}</td>
+            {% else %}
+            <td>{{ cell }}</td>
+            {% endif %}
             {% endfor %}
-            </thead>
-            <tbody>
-            {% for index, row in df.iterrows() %}
-                <tr>
-                    <td><a href="{{ url_for('stock', ticker=row['Ticker'], interval=interval) }}">{{ row['Ticker'] }}</a></td>
-                    {% for cell in row[1:] %}
-                        {% if cell is integer %}
-                            <td>{{ cell }}</td>
-                        {% elif cell is float %}
-                            <td>{{ cell|round(5) }}</td>
-                        {% else %}
-                            <td>{{ cell }}</td>
-                        {% endif %}
-                    {% endfor %}
-                </tr>
-            {% endfor %}
-            </tbody>
-        </table>
-    </div>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
 
 
 {% endblock %}
