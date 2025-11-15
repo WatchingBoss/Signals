@@ -33,20 +33,35 @@ def get_rub_shares(client) -> dict:
         return json.load(f)
 
 
+def get_candles_with_limit(client, figi: str, to_time: datetime, limit: int, interval: CandleInterval) -> list:
+    candles = client.market_data.get_candles(
+        instrument_id=figi,
+        to=to_time,
+        limit=limit,
+        interval=interval,
+    ).candles
+    # lambda get_price(x): x.units + (x.nano / NANO_DIVISOR)
+    out_candles = []
+    for candle in candles:
+        moscow_time = candle.time.astimezone(TARGET_TZ).strftime("%H:%M:%S")
+        high_price = candle.high.units + (candle.high.nano / NANO_DIVISOR)
+        low_price = candle.low.units + (candle.low.nano / NANO_DIVISOR)
+        close_price = candle.close.units + (candle.close.nano / NANO_DIVISOR)
+        open_price = candle.open.units + (candle.open.nano / NANO_DIVISOR)
+
+        out_candles.append((high_price, low_price, open_price, close_price, moscow_time))
+    return out_candles
+
+
 def main():
     api_token = get_token()
     with SandboxClient(api_token) as client:
         shares = get_rub_shares(client)
-        sber_candles = client.market_data.get_candles(
-            instrument_id=shares['SBER'][0],
-            to=now(),
-            limit=21,
-            interval=CandleInterval.CANDLE_INTERVAL_5_MIN,
-        ).candles
+        sber_candles = get_candles_with_limit(client, shares['SBER'][0], now(), 25,
+                                              CandleInterval.CANDLE_INTERVAL_5_SEC)
+        print(f"{'High': 6}{'Low': 6}{'Open': 6}{'Close': 6}{'Time': 10}")
         for candle in sber_candles:
-            moscow_time = candle.time.astimezone(TARGET_TZ).strftime("%H:%M")
-            close_price = candle.close.units + (candle.close.nano / NANO_DIVISOR)
-            print(f"{moscow_time} | {close_price}")
+            print(f"{candle[0]: 6}{candle[1]: 6}{candle[2]: 6}{candle[3]: 6}{candle[4]: 10}")
 
 
 
