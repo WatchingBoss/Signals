@@ -1,7 +1,9 @@
 import os
 import json
 from datetime import datetime
-import pytz
+from zoneinfo import ZoneInfo
+
+import polars as pl
 
 from tinkoff.invest.sandbox.client import SandboxClient
 from tinkoff.invest import CandleInterval
@@ -11,7 +13,7 @@ from tinkoff.invest.utils import now
 DATA_DIR_PATH = os.path.join(os.curdir, "data")
 SHARES_FILE_PATH = os.path.join(DATA_DIR_PATH, "shares.json")
 
-TARGET_TZ = pytz.timezone("Europe/Moscow")
+TARGET_TZ = ZoneInfo("Europe/Moscow")
 NANO_DIVISOR = 1_000_000_000
 
 
@@ -33,36 +35,46 @@ def get_rub_shares(client) -> dict:
         return json.load(f)
 
 
-def get_candles_with_limit(client, figi: str, to_time: datetime, limit: int, interval: CandleInterval) -> list:
-    candles = client.market_data.get_candles(
+def get_candles_with_limit(client, figi: str, to_time: datetime, limit: int,
+                           interval: CandleInterval) -> pl.DataFrame:
+    raw_candles = client.market_data.get_candles(
         instrument_id=figi,
         to=to_time,
         limit=limit,
         interval=interval,
     ).candles
-    # lambda get_price(x): x.units + (x.nano / NANO_DIVISOR)
-    out_candles = []
-    for candle in candles:
-        moscow_time = candle.time.astimezone(TARGET_TZ).strftime("%H:%M:%S")
-        high_price = candle.high.units + (candle.high.nano / NANO_DIVISOR)
-        low_price = candle.low.units + (candle.low.nano / NANO_DIVISOR)
-        close_price = candle.close.units + (candle.close.nano / NANO_DIVISOR)
-        open_price = candle.open.units + (candle.open.nano / NANO_DIVISOR)
+    def get_price(x): return x.units + (x.nano / NANO_DIVISOR)
+    data_dicts = [
+        {
+            "high": get_price(x.high),
+            "low": get_price(x.low),
+            "close": get_price(x.close),
+            "open": get_price(x.open),
+            "time": x.time.astimezone(TARGET_TZ),
+        }
+        for x in raw_candles
+    ]
+    df = pl.DataFrame(data_dicts)
+    df = df.with_columns(pl.col('time').dt.strftime("%H:%M:%S").alias("time_string"))
+    return df
 
-        out_candles.append((high_price, low_price, open_price, close_price, moscow_time))
-    return out_candles
+
+def print_candles(df: pl.DataFrame, rows: int = 20):
+    with pl.Config(tbl_rows=rows):
+        print(
+            df.head(20).select(
+                ["high", "low", "close", "open", "time_string"]
+            )
+        )
 
 
 def main():
     api_token = get_token()
     with SandboxClient(api_token) as client:
         shares = get_rub_shares(client)
-        sber_candles = get_candles_with_limit(client, shares['SBER'][0], now(), 25,
+        sber_candles = get_candles_with_limit(client, shares['SBER'][0], now(), 50,
                                               CandleInterval.CANDLE_INTERVAL_5_SEC)
-        print(f"{'High': 6}{'Low': 6}{'Open': 6}{'Close': 6}{'Time': 10}")
-        for candle in sber_candles:
-            print(f"{candle[0]: 6}{candle[1]: 6}{candle[2]: 6}{candle[3]: 6}{candle[4]: 10}")
-
+        print_candles(sber_candles)
 
 
 if __name__ == "__main__":
