@@ -5,6 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "pytz>=2025.2",
+    "polars>=1.35.2",
     "tinkoff-investments>=0.2.0b117",
+    "tzdata>=2025.2",
 ]
