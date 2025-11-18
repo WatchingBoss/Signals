@@ -25,13 +25,17 @@ TARGET_TZ = ZoneInfo("Europe/Moscow")
 NANO_DIVISOR = 1_000_000_000
 
 
+def get_price(x):
+    return x.units + (x.nano / NANO_DIVISOR)
+
+
 def get_token() -> str:
     with open(os.path.join(os.path.expanduser('~'), 'no_commit', 'info.json')) as f:
         data = json.load(f)
     return data['token_tinkoff_sandbox']
 
 
-async def request_iterator(instruments: list, interval: SubscriptionInterval):
+async def request_iterator(instruments: list):
     yield MarketDataRequest(
         subscribe_candles_request=SubscribeCandlesRequest(
             waiting_close=True,
@@ -64,8 +68,9 @@ def get_rub_shares(client) -> dict:
         return json.load(f)
 
 
-async def get_candles_with_limit(client, uid: str, to_time: datetime, limit: int,
-                                 interval: CandleInterval) -> pl.DataFrame:
+async def get_candles_with_limit(
+        client, uid: str, to_time: datetime, limit: int, interval: CandleInterval
+) -> pl.DataFrame:
     raw_candles = await client.market_data.get_candles(
         instrument_id=uid,
         to=to_time,
@@ -73,40 +78,37 @@ async def get_candles_with_limit(client, uid: str, to_time: datetime, limit: int
         interval=interval,
     )
 
-    def get_price(x):
-        return x.units + (x.nano / NANO_DIVISOR)
-
     data_dicts = [
         {
             "high": get_price(x.high),
             "low": get_price(x.low),
             "close": get_price(x.close),
             "open": get_price(x.open),
+            "volume": x.volume,
             "time": x.time.astimezone(TARGET_TZ),
         }
         for x in raw_candles.candles
     ]
     df = pl.DataFrame(data_dicts)
-    df = df.with_columns(pl.col('time').dt.strftime("%H:%M:%S").alias("time_string"))
     return df
 
 
-def print_candles(df: pl.DataFrame, rows: int = 20):
-    with pl.Config(tbl_rows=rows):
-        print(
-            df.head(20).select(
-                ["high", "low", "close", "open", "time_string"]
-            )
-        )
+async def update_candles(candles: dict, in_queue: asyncio.Queue):
+    while True:
+        ticker, candle = await in_queue.get()
+        candles[ticker] = pl.concat([candles[ticker], candle], how='vertical')
+
+        print(f"Update for {ticker}")
+        print(candles[ticker])
 
 
-async def get_metadata(client, shares: dict, out_queue: asyncio.Queue):
+async def get_metadata(client, uid_list: list, out_queue: asyncio.Queue):
     instruments = [
         CandleInstrument(
             instrument_id=uid,
             interval=SubscriptionInterval.SUBSCRIPTION_INTERVAL_ONE_MINUTE,
         )
-        for uid in [shares['SBER']['uid'], shares['GAZP']['uid'], shares['T']['uid']]
+        for uid in uid_list
     ]
     async for metadata in client.market_data_stream.market_data_stream(
         request_iterator(
@@ -116,30 +118,23 @@ async def get_metadata(client, shares: dict, out_queue: asyncio.Queue):
         await out_queue.put(metadata)
 
 
-async def print_metadata(in_queue: asyncio.Queue):
-    candles = {}
-
-    def get_price(x):
-        return x.units + (x.nano / NANO_DIVISOR)
-
+async def extract_candle(uid_to_ticker: dict, in_queue: asyncio.Queue, out_queue: asyncio.Queue):
     while True:
         metadata = await in_queue.get()
         try:
-            candle = {
+            df = pl.DataFrame(
+                {
                 "high": get_price(metadata.candle.high),
                 "low": get_price(metadata.candle.low),
                 "close": get_price(metadata.candle.close),
                 "open": get_price(metadata.candle.open),
                 "volume": metadata.candle.volume,
                 "time": metadata.candle.time.astimezone(TARGET_TZ),
-            }
-            key = metadata.candle.instrument_uid
-            if key not in candles:
-                candles[key] = []
-            candles[key].append(candle)
-            df = pl.DataFrame(candles[key])
-            with pl.Config(tbl_rows=20):
-                print(df.head(20))
+                }
+            )
+            ticker = uid_to_ticker[metadata.candle.instrument_uid]
+
+            await out_queue.put((ticker, df))
         except AttributeError as e:
             print(f"AttributeError: {str(e)}")
             print({metadata})
@@ -149,15 +144,24 @@ async def main():
     api_token = get_token()
     async with AsyncSandboxClient(api_token) as client:
         shares = get_rub_shares(client)
-        sber_candles = await get_candles_with_limit(
-            client, shares['SBER']['uid'], now(), 25,CandleInterval.CANDLE_INTERVAL_1_MIN
-        )
+        tickers = ['SBER', 'GAZP', 'T', 'LKOH', 'NVTK']
+        uid_to_ticker = {shares[ticker]['uid']: ticker for ticker in tickers}
 
-        print_candles(sber_candles)
+        ticker_candles = {
+            ticker: await get_candles_with_limit(
+                client, shares[ticker]['uid'], now(), 25, CandleInterval.CANDLE_INTERVAL_1_MIN
+            ) for ticker in tickers
+        }
+
+        for key, value in ticker_candles.items():
+            print(f"{key}: \n{value}")
+
         queue_metadata = asyncio.Queue()
+        queue_candles = asyncio.Queue()
         await asyncio.gather(
-            get_metadata(client, shares, queue_metadata),
-            print_metadata(queue_metadata)
+            get_metadata(client, list(uid_to_ticker.keys()), queue_metadata),
+            extract_candle(uid_to_ticker, queue_metadata, queue_candles),
+            update_candles(ticker_candles, queue_candles)
         )
 
 
