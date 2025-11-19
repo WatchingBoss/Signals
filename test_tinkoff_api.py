@@ -111,9 +111,7 @@ async def get_metadata(client, uid_list: list, out_queue: asyncio.Queue):
         for uid in uid_list
     ]
     async for metadata in client.market_data_stream.market_data_stream(
-        request_iterator(
-            instruments, SubscriptionInterval.SUBSCRIPTION_INTERVAL_ONE_MINUTE
-        )
+        request_iterator(instruments)
     ):
         await out_queue.put(metadata)
 
