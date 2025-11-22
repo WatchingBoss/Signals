@@ -22,11 +22,10 @@ DATA_DIR_PATH = os.path.join(os.curdir, "data")
 SHARES_FILE_PATH = os.path.join(DATA_DIR_PATH, "shares.json")
 
 TARGET_TZ = ZoneInfo("Europe/Moscow")
-NANO_DIVISOR = 1_000_000_000
 
 
 def get_price(x):
-    return x.units + (x.nano / NANO_DIVISOR)
+    return x.units + (x.nano / 1e9)
 
 
 def get_token() -> str:
