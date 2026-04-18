@@ -1,17 +1,10 @@
-import os
-import json
+from t_tech.invest import Client
 
-from tinkoff.invest import Client
+from config import INVEST_TOKEN
 
 
 def get_price(x):
     return x.units + (x.nano / 1e9)
-
-
-def get_token() -> str:
-    with open(os.path.join(os.path.expanduser("~"), "no_commit", "info.json")) as f:
-        data = json.load(f)
-    return data["token_tinkoff_view_only"]
 
 
 class Bond:
@@ -104,7 +97,7 @@ def print_portfolio(total: dict, bonds: dict):
 
 
 def main():
-    with Client(get_token()) as client:
+    with Client(INVEST_TOKEN) as client:
         total = {}
         bonds = {}
 

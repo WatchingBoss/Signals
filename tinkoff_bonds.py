@@ -9,23 +9,19 @@ from zoneinfo import ZoneInfo
 from pympler import asizeof
 import polars as pl
 
-from tinkoff.invest import (
+from t_tech.invest import (
     Client,
     Quotation,
     MoneyValue,
 )
 
-DATA_DIR_PATH = os.path.join(os.curdir, "data")
-BONDS_FILE_PATH = os.path.join(DATA_DIR_PATH, "bonds.parquet")
-BONDS_EXCEL_PATH = os.path.join(DATA_DIR_PATH, "bonds.xlsx")
+from config import INVEST_TOKEN, data_path
+
+
+bonds_parquet_path = data_path / "bonds.parquet"
+bonds_xlsx_path = data_path / "bonds.xlsx"
 
 TARGET_TZ = ZoneInfo("Europe/Moscow")
-
-
-def get_token() -> str:
-    with open(os.path.join(os.path.expanduser('~'), 'no_commit', 'info.json')) as f:
-        data = json.load(f)
-    return data['token_tinkoff_sandbox']
 
 
 @dataclass
@@ -123,27 +119,25 @@ class BondData:
 
 
 def get_bonds(client) -> Tuple[List[BondData], pl.DataFrame]:
-    if not os.path.isdir(DATA_DIR_PATH):
-        os.mkdir(DATA_DIR_PATH)
-    if not os.path.isfile(BONDS_FILE_PATH):
+    data_path.mkdir(parents=True, exist_ok=True)
+    if not bonds_parquet_path.exists():
         bond_objects = [
             BondData.from_tinkoff_object(x)
             for x in client.instruments.bonds().instruments
         ]
         df = pl.DataFrame([x.to_dict() for x in bond_objects])
-        df.write_parquet(BONDS_FILE_PATH)
+        df.write_parquet(bonds_parquet_path)
         df.with_columns(
             pl.col(pl.Datetime).dt.to_string("%Y-%m-%d")
-        ).write_excel(BONDS_EXCEL_PATH)
+        ).write_excel(bonds_xlsx_path)
         return bond_objects, df
-    df = pl.read_parquet(BONDS_FILE_PATH)
+    df = pl.read_parquet(bonds_parquet_path)
     bond_objects = [BondData.from_row(row) for row in df.to_dicts()]
     return bond_objects, df
 
 
 def main():
-    api_token = get_token()
-    with Client(api_token) as client:
+    with Client(INVEST_TOKEN) as client:
         bonds_list, bonds_df = get_bonds(client)
 
         print(f"Size of bonds list: {asizeof.asizeof(bonds_list) / 1024:.2f} KB")

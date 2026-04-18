@@ -1,4 +1,3 @@
-import os
 import json
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -6,8 +5,8 @@ import asyncio
 
 import polars as pl
 
-from tinkoff.invest.sandbox.async_client import AsyncSandboxClient
-from tinkoff.invest import (
+from t_tech.invest import AsyncClient
+from t_tech.invest import (
     CandleInterval,
     MarketDataRequest,
     SubscribeCandlesRequest,
@@ -15,23 +14,18 @@ from tinkoff.invest import (
     SubscriptionInterval,
     CandleInstrument,
 )
-from tinkoff.invest.utils import now
+from t_tech.invest.utils import now
+
+from config import INVEST_TOKEN, data_path
 
 
-DATA_DIR_PATH = os.path.join(os.curdir, "data")
-SHARES_FILE_PATH = os.path.join(DATA_DIR_PATH, "shares.json")
+shares_json_path = data_path / "shares.json"
 
 TARGET_TZ = ZoneInfo("Europe/Moscow")
 
 
 def get_price(x):
     return x.units + (x.nano / 1e9)
-
-
-def get_token() -> str:
-    with open(os.path.join(os.path.expanduser('~'), 'no_commit', 'info.json')) as f:
-        data = json.load(f)
-    return data['token_tinkoff_sandbox']
 
 
 async def request_iterator(instruments: list):
@@ -47,10 +41,10 @@ async def request_iterator(instruments: list):
         await asyncio.sleep(1)
 
 
-def get_rub_shares(client) -> dict:
-    if not os.path.isdir(DATA_DIR_PATH):
-        os.mkdir(DATA_DIR_PATH)
-    if not os.path.isfile(SHARES_FILE_PATH):
+async def get_rub_shares(client) -> dict:
+    data_path.mkdir(parents=True, exist_ok=True)
+    if not shares_json_path.exists():
+        shares = await client.instruments.shares()
         rub_shares = {
             x.ticker: {
                 'figi': x.figi,
@@ -59,11 +53,11 @@ def get_rub_shares(client) -> dict:
                 'name': x.name,
                 'isin': x.isin
             }
-            for x in client.instruments.shares().instruments if x.currency == "rub"
+            for x in shares.instruments if x.currency == "rub"
         }
-        with open(SHARES_FILE_PATH, 'w') as f:
+        with shares_json_path.open('w', encoding="utf-8") as f:
             json.dump(rub_shares, f)
-    with open(SHARES_FILE_PATH, 'r') as f:
+    with shares_json_path.open('r', encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -118,6 +112,10 @@ async def get_metadata(client, uid_list: list, out_queue: asyncio.Queue):
 async def extract_candle(uid_to_ticker: dict, in_queue: asyncio.Queue, out_queue: asyncio.Queue):
     while True:
         metadata = await in_queue.get()
+
+        if not metadata.candle:
+            continue
+
         try:
             df = pl.DataFrame(
                 {
@@ -138,9 +136,8 @@ async def extract_candle(uid_to_ticker: dict, in_queue: asyncio.Queue, out_queue
 
 
 async def main():
-    api_token = get_token()
-    async with AsyncSandboxClient(api_token) as client:
-        shares = get_rub_shares(client)
+    async with AsyncClient(INVEST_TOKEN) as client:
+        shares = await get_rub_shares(client)
         tickers = ['SBER', 'GAZP', 'T', 'LKOH', 'NVTK']
         uid_to_ticker = {shares[ticker]['uid']: ticker for ticker in tickers}
 
@@ -155,12 +152,19 @@ async def main():
 
         queue_metadata = asyncio.Queue()
         queue_candles = asyncio.Queue()
-        await asyncio.gather(
-            get_metadata(client, list(uid_to_ticker.keys()), queue_metadata),
-            extract_candle(uid_to_ticker, queue_metadata, queue_candles),
-            update_candles(ticker_candles, queue_candles)
-        )
+        try:
+            await asyncio.gather(
+                get_metadata(client, list(uid_to_ticker.keys()), queue_metadata),
+                extract_candle(uid_to_ticker, queue_metadata, queue_candles),
+                update_candles(ticker_candles, queue_candles)
+            )
+        except asyncio.CancelledError:
+            print("Get interruption")
+            raise
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("User interrupt. Program terminated.")
