@@ -9,3 +9,4 @@ data/
 data/work_stocks.txt
 uv.lock
 *.xlsx
+.env
