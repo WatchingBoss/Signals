@@ -10,3 +10,8 @@ data/work_stocks.txt
 uv.lock
 *.xlsx
 .env
+/invest-python-repo
+.DS_Store
+
+/flutter_client/build
+/flutter_client/debug_info

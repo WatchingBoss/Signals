@@ -3,13 +3,16 @@ name = "signals"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.13.12"
 dependencies = [
+    "aio-pika>=9.6.2",
     "dotenv>=0.9.9",
+    "fastapi>=0.136.0",
     "polars>=1.35.2",
     "pympler>=1.1",
     "t-tech-investments>=0.3.4",
     "tzdata>=2025.2",
+    "uvicorn[standard]>=0.46.0",
     "xlsxwriter>=3.2.9",
 ]
 
